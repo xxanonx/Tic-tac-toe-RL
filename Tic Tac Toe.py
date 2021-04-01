@@ -40,6 +40,7 @@ class board_env:
         print(self.p1.sign)
         self.game_over = False
         self.whose_turn = False
+        # false = O and true = X
         self.reset()
 
     def reset(self):
@@ -111,6 +112,33 @@ class board_env:
         if board_filled and not self.game_over:
             self.game_over = True
             return False, 0
+
+    def get_state(self, human=False):
+        # Whose turn matters and human matters
+        if human:
+            if self.whose_turn:
+                piece = "X"
+                op_piece = "O"
+            else:
+                piece = "O"
+                op_piece = "X"
+
+            print(f"Your piece is {piece}, make your move\n\t(-1, 0, 1) one number for the X axis, and one for the Y axis. seperated by a comma (,)\n\n")
+            for row in self.board:
+                line = "|"
+                for val in row:
+                    if val == -1:
+                        line += f" {op_piece} |"
+                    elif val == 1:
+                        line += f" {piece} |"
+                    else:
+                        line += "  |"
+                print(line)
+        else:
+            # Computers turn
+            pass
+
+
 
 b1 = board_env()
 print(b1.board)
