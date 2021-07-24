@@ -2,9 +2,9 @@
 #   goal create tic tac toe game and have agents play it
 
 import numpy as np
-import tensorflow as tf
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense, Flatten
+#import tensorflow as tf
+#from tensorflow.keras.models import Sequential
+#from tensorflow.keras.layers import Dense, Flatten
 import random, time
 
 class player:
@@ -16,30 +16,30 @@ class player:
 
         #Player Model
         #Looks at state and decides what move to make
-        self.Actor_model = Sequential()
-        self.Actor_model.add(Dense(9, activation='relu', input_shape=(3, 3)))
-        self.Actor_model.add(Flatten())
-        self.Actor_model.add(Dense(9, activation='relu'))
-        self.Actor_model.add(Dense(2, activation='linear'))
-        self.Actor_model.compile(optimizer='adam')
-        self.Actor_model.summary()
+       # self.Actor_model = Sequential()
+       # self.Actor_model.add(Dense(9, activation='relu', input_shape=(3, 3)))
+       # self.Actor_model.add(Flatten())
+       # self.Actor_model.add(Dense(9, activation='relu'))
+       # self.Actor_model.add(Dense(2, activation='linear'))
+       # self.Actor_model.compile(optimizer='adam')
+       # self.Actor_model.summary()
 
         #Critic Model
         # Looks at state and thinks its a good state for actor or not
-        self.Critic_model = Sequential()
-        self.Critic_model.add(Dense(9, activation='relu', input_shape=(3, 3)))
-        self.Critic_model.add(Flatten())
-        self.Critic_model.add(Dense(4, activation='relu'))
-        self.Critic_model.add(Dense(2, activation='linear'))
-        self.Critic_model.compile(optimizer='adam')
-        self.Critic_model.summary()
+       # self.Critic_model = Sequential()
+       # self.Critic_model.add(Dense(9, activation='relu', input_shape=(3, 3)))
+       # self.Critic_model.add(Flatten())
+       # self.Critic_model.add(Dense(4, activation='relu'))
+       # self.Critic_model.add(Dense(2, activation='linear'))
+       # self.Critic_model.compile(optimizer='adam')
+       # self.Critic_model.summary()
 
 class board_env:
     def __init__(self):
         self.p1 = player(1)
         # print(self.p1.sign)
         self.game_over = False
-        self.whose_turn = False
+        self.whose_turn = True
         # -1 = O and 1 = X
         # false = 0 and true = X
         self.reset()
@@ -56,7 +56,7 @@ class board_env:
         self.p1.score = 0
         self.p1.opponent_score = 0
         self.game_over = False
-        self.whose_turn = False
+        # self.whose_turn = not self.whose_turn
 
     def look_for_win(self):
         # if no zeros are found the game is over, this can tell if its a tie
@@ -133,7 +133,7 @@ class board_env:
             # diag_win = True
             if in_a_row == 3:
                 self.game_over = True
-                return True, ULC_2_LRC[0]
+                return True, LLC_2_URC[0]
 
         if board_filled and not self.game_over:
             self.game_over = True
@@ -236,7 +236,7 @@ class board_env:
                 self.board[y][x] = -1
             return True
         else:
-            print("can't make that move!")
+           # print("can't make that move!")
             return False
 
     def get_state(self, human=False, random_play=False):
@@ -284,7 +284,7 @@ class board_env:
                     # print(move1)
                     if (move1[0] != move2[0]) and (move1[1] != move2[1]):
                         if self.make_move(move1[0], move1[1]):
-                            print(f"{move} is acceptable")
+                           # print(f"{move} is acceptable")
                             break
 
                 print(f"{move} IS INVALID")
@@ -327,12 +327,16 @@ class board_env:
 
 
 b1 = board_env()
-print(b1.board)
+# print(b1.board)
 while True:
     b1.get_state(human=b1.whose_turn, random_play=True)
-    print(b1.board)
-    print(b1.whose_turn)
+    # print(b1.board)
+    # print(b1.whose_turn)
     game_over, winner = b1.look_for_win()
     print(f"X Value: {b1.value_of_board(game_over, b1.whose_turn)}, O Value: {b1.value_of_board(game_over, (not b1.whose_turn), -1)}")
     if b1.game_over:
-        b1.reset()
+         print(b1.board)
+       	 if winner == -1: print("Computer WON!!!")
+         elif winner == 1: print("Person WON!!!!")
+         else: print("DRAW")
+         b1.reset()
