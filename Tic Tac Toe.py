@@ -2,10 +2,15 @@
 #   goal create tic tac toe game and have agents play it
 
 import numpy as np
-#import tensorflow as tf
-#from tensorflow.keras.models import Sequential
-#from tensorflow.keras.layers import Dense, Flatten
+import tensorflow as tf
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, Flatten
 import random, time
+import matplotlib.pyplot as plt
+
+config = tf.compat.v1.ConfigProto()
+config.gpu_options.allow_growth = True
+session = tf.compat.v1.InteractiveSession(config=config)
 
 class player:
     def __init__(self, sign=1):
@@ -13,36 +18,73 @@ class player:
         self.score = 0
         self.opponent_score = 0
 
-
-        #Player Model
-        #Looks at state and decides what move to make
-       # self.Actor_model = Sequential()
-       # self.Actor_model.add(Dense(9, activation='relu', input_shape=(3, 3)))
-       # self.Actor_model.add(Flatten())
-       # self.Actor_model.add(Dense(9, activation='relu'))
-       # self.Actor_model.add(Dense(2, activation='linear'))
-       # self.Actor_model.compile(optimizer='adam')
-       # self.Actor_model.summary()
-
         #Critic Model
         # Looks at state and thinks its a good state for actor or not
-       # self.Critic_model = Sequential()
-       # self.Critic_model.add(Dense(9, activation='relu', input_shape=(3, 3)))
-       # self.Critic_model.add(Flatten())
-       # self.Critic_model.add(Dense(4, activation='relu'))
-       # self.Critic_model.add(Dense(2, activation='linear'))
-       # self.Critic_model.compile(optimizer='adam')
-       # self.Critic_model.summary()
+        self.Critic_model = Sequential()
+        self.Critic_model.add(Dense(9, input_shape=(2, 3, 3), activation='relu'))
+        self.Critic_model.add(Flatten())
+        self.Critic_model.add(Dense(9, activation='relu'))
+        self.Critic_model.add(Dense(1, activation='linear'))
+        self.Critic_model.compile(
+            optimizer='adam',
+            loss='mean_absolute_error',
+            metrics=['mean_absolute_error']
+        )
+        self.Critic_model.summary()
+
+        # Actor trained on wins
+        self.Actor_model = Sequential()
+        self.Actor_model.add(Dense(9, input_shape=(2, 3, 3), activation='relu'))
+        self.Actor_model.add(Flatten())
+        self.Actor_model.add(Dense(9, activation='relu'))
+        self.Actor_model.add(Dense(2, activation='tanh'))
+        self.Actor_model.compile(
+            optimizer='adam',
+            loss='mean_absolute_error',
+            metrics=['mean_absolute_error']
+        )
+        self.Actor_model.summary()
+
+    def teach_critc(self, state, value):
+        div = int((len(state) * 0.7))
+        train_x = np.copy(state[:div]).astype('float64')
+        validation_x = np.copy(state[div:]).astype('float64')
+        train_y = np.copy(value[:div]).astype('float64')
+        validation_y = np.copy(value[div:]).astype('float64')
+
+        print(train_x.dtype)
+        print(train_y.dtype)
+        print(train_x.shape)
+
+        print(train_y.shape)
+
+        self.Critic_model.fit(train_x, train_y,  validation_data=(validation_x, validation_y), epochs= 5)
 
 class board_env:
     def __init__(self):
-        self.p1 = player(1)
-        # print(self.p1.sign)
+        self.p1 = player(-1)
+        # For actor
+        self.round_buffer = []
+        self.move_buffer = []
+        self.actor_training = []
+        self.actor_moves = []
+        # For critic
+        self.recorded_games = []
+        self.recorded_scores = []
+        # other
+        self.games_played = -1
+        self.board = np.array([
+            [0, 0, 0],
+            [0, 0, 0],
+            [0, 0, 0]
+        ])
+        self.previous_board = np.copy(self.board)
         self.game_over = False
         self.whose_turn = True
         # -1 = O and 1 = X
         # false = 0 and true = X
         self.reset()
+
 
     def reset(self):
         ''' |0|0|0|
@@ -53,9 +95,8 @@ class board_env:
             [0, 0, 0],
             [0, 0, 0]
         ])
-        self.p1.score = 0
-        self.p1.opponent_score = 0
         self.game_over = False
+        self.games_played += 1
         # self.whose_turn = not self.whose_turn
 
     def look_for_win(self):
@@ -145,15 +186,55 @@ class board_env:
         # print("Checking horizontal")
         rough_value = 0
         win_found = False
+        if self.board.any():
+            for row in self.board:
+                in_a_row = 0
+                # print(row)
+                if (row.any() and not is_win and not row.all()) or (is_win and row.all()):
+                    for valr in row:
+                        # double check that all values are the same
+                        if int(valr) != symbol:
+                            if int(valr) != 0:
+                                in_a_row -= 1
+                                # break
+                        else:
+                            in_a_row += 1
 
-        for row in self.board:
-            in_a_row = 0
-            # print(row)
-            if (row.any() and not is_win and not row.all()) or (is_win and row.all()):
-                for valr in row:
-                    # double check that all values are the same
-                    if int(valr) != symbol:
-                        if int(valr) != 0:
+                    if (not is_turn and (-1 > in_a_row or in_a_row > 1)) or (is_turn and (in_a_row >= 2)):
+                        rough_value += in_a_row
+                        if in_a_row == 3:
+                            win_found = True
+
+
+            # Checking vertical
+            # print("Checking vertical")
+            for col in self.board.transpose():
+                in_a_row = 0
+                # print(row)
+                if (col.any() and not is_win and not col.all()) or (is_win and col.all()):
+                    for valc in col:
+                        # double check that all values are the same
+                        if int(valc) != symbol:
+                            if int(valc) != 0:
+                                in_a_row -= 1
+                                # break
+                        else:
+                            in_a_row += 1
+
+                    if (not is_turn and (-1 > in_a_row or in_a_row > 1)) or (is_turn and (in_a_row >= 2)):
+                        rough_value += in_a_row
+                        if in_a_row == 3:
+                            win_found = True
+
+            # Checking Diagonal
+            # diag_win = False
+            # print("Checking Diagonal")
+            ULC_2_LRC = self.board.diagonal()
+            if (ULC_2_LRC.any() and not is_win and not ULC_2_LRC.all()) or (is_win and ULC_2_LRC.all()):
+                in_a_row = 0
+                for vald1 in ULC_2_LRC:
+                    if int(vald1) != symbol:
+                        if int(vald1) != 0:
                             in_a_row -= 1
                             # break
                     else:
@@ -164,17 +245,13 @@ class board_env:
                     if in_a_row == 3:
                         win_found = True
 
-
-        # Checking vertical
-        # print("Checking vertical")
-        for col in self.board.transpose():
-            in_a_row = 0
-            # print(row)
-            if (col.any() and not is_win and not col.all()) or (is_win and col.all()):
-                for valc in col:
-                    # double check that all values are the same
-                    if int(valc) != symbol:
-                        if int(valc) != 0:
+            # print("Checking Diagonal 2")
+            LLC_2_URC = np.flipud(self.board).diagonal()
+            if (LLC_2_URC.any() and not is_win and not LLC_2_URC.all()) or (is_win and LLC_2_URC.all()):
+                in_a_row = 0
+                for vald2 in LLC_2_URC:
+                    if int(vald2) != symbol:
+                        if int(vald2) != 0:
                             in_a_row -= 1
                             # break
                     else:
@@ -185,46 +262,13 @@ class board_env:
                     if in_a_row == 3:
                         win_found = True
 
-        # Checking Diagonal
-        # diag_win = False
-        # print("Checking Diagonal")
-        ULC_2_LRC = self.board.diagonal()
-        if (ULC_2_LRC.any() and not is_win and not ULC_2_LRC.all()) or (is_win and ULC_2_LRC.all()):
-            in_a_row = 0
-            for vald1 in ULC_2_LRC:
-                if int(vald1) != symbol:
-                    if int(vald1) != 0:
-                        in_a_row -= 1
-                        # break
-                else:
-                    in_a_row += 1
+            # final estimate
+            rough_value /= np.count_nonzero(self.board)
+            if win_found:
+                rough_value += 0.4
 
-            if (not is_turn and (-1 > in_a_row or in_a_row > 1)) or (is_turn and (in_a_row >= 2)):
-                rough_value += in_a_row
-                if in_a_row == 3:
-                    win_found = True
-
-        # print("Checking Diagonal 2")
-        LLC_2_URC = np.flipud(self.board).diagonal()
-        if (LLC_2_URC.any() and not is_win and not LLC_2_URC.all()) or (is_win and LLC_2_URC.all()):
-            in_a_row = 0
-            for vald2 in LLC_2_URC:
-                if int(vald2) != symbol:
-                    if int(vald2) != 0:
-                        in_a_row -= 1
-                        # break
-                else:
-                    in_a_row += 1
-
-            if (not is_turn and (-1 > in_a_row or in_a_row > 1)) or (is_turn and (in_a_row >= 2)):
-                rough_value += in_a_row
-                if in_a_row == 3:
-                    win_found = True
-
-        # final estimate
-        rough_value /= np.count_nonzero(self.board)
-        if win_found:
-            rough_value += 0.4
+            if rough_value > 1.0:
+                rough_value = 1.0
 
         return rough_value
 
@@ -239,7 +283,7 @@ class board_env:
            # print("can't make that move!")
             return False
 
-    def get_state(self, human=False, random_play=False):
+    def get_state(self, human=False, random_play=False, verbose=False):
         # Whose turn matters and human matters
         if human:
             if self.whose_turn:
@@ -291,7 +335,7 @@ class board_env:
 
         else:
             # Computers turn
-            print("Computer's turn")
+            # print("Computer's turn")
             while True:
                 move = [0,0]
                 if random_play:
@@ -321,22 +365,73 @@ class board_env:
                         # print(f"{move} is acceptable")
                         break
 
-                # print(f"{move} IS INVALID")
+            # for critic
+            self.recorded_games.append([self.board, self.previous_board])
+            self.recorded_scores.append(self.value_of_board(self.game_over, self.whose_turn, symbol=-1))
 
+            # for actor
+            if not self.whose_turn:
+                self.round_buffer.append([self.board, self.previous_board])
+                self.move_buffer.append(move1)
+
+            done, winner_ = self.look_for_win()
+            if done:
+                if self.p1.sign == winner_:
+                    self.p1.score += 1
+                else:
+                    self.p1.opponent_score += 1
+                if not verbose:
+                    self.reset()
+
+                if winner_ == -1:
+                    self.actor_training.extend(self.round_buffer)
+                    self.actor_moves.extend(self.move_buffer)
+                self.round_buffer.clear()
+                self.move_buffer.clear()
+
+        # end of turn
         self.whose_turn = not self.whose_turn
+        self.previous_board = np.copy(self.board)
+
 
 
 b1 = board_env()
 # print(b1.board)
+learning = True
+how_much_off = []
 while True:
-    b1.get_state(human=b1.whose_turn, random_play=True)
-    # print(b1.board)
-    # print(b1.whose_turn)
-    game_over, winner = b1.look_for_win()
-    print(f"X Value: {b1.value_of_board(game_over, b1.whose_turn)}, O Value: {b1.value_of_board(game_over, (not b1.whose_turn), -1)}")
-    if b1.game_over:
-         print(b1.board)
-       	 if winner == -1: print("Computer WON!!!")
-         elif winner == 1: print("Person WON!!!!")
-         else: print("DRAW")
-         b1.reset()
+    if b1.games_played > 30000:
+        if learning:
+            print(f"{b1.p1.score} V.S. {b1.p1.opponent_score}")
+            b1.p1.teach_critc(b1.recorded_games, b1.recorded_scores)
+            learning = False
+
+        b1.get_state(human=b1.whose_turn, random_play=True, verbose=True)
+
+        game_over, winner = b1.look_for_win()
+        AI_predicted = b1.p1.Critic_model.predict(np.array([[b1.board, b1.previous_board]]))
+        Calculated_o = b1.value_of_board(game_over, b1.whose_turn, -1)
+        how_much_off.append(Calculated_o - AI_predicted[0][0])
+        print(f"Calculated X Value: {b1.value_of_board(game_over, not b1.whose_turn)}, Calculated O Value: {Calculated_o}")
+        print(f"Ai Value for O's: {AI_predicted[0][0]}, it is {how_much_off[-1]} off")
+
+        if game_over:
+            print(b1.board)
+            if winner == -1:
+                print("Computer WON!!!")
+            elif winner == 1:
+                print("Person WON!!!!")
+            else:
+                print("DRAW")
+            b1.reset()
+
+            plt.plot(how_much_off)
+            plt.show()
+            how_much_off = []
+
+
+    else:
+        b1.get_state(human=False, random_play=True)
+        learning = True
+        # print(b1.board)
+        # time.sleep(1)
