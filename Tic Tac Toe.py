@@ -4,7 +4,7 @@
 import numpy as np
 import tensorflow as tf
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense, Flatten
+from tensorflow.keras.layers import Dense, Reshape, Flatten
 import random, time
 import matplotlib.pyplot as plt
 
@@ -18,13 +18,14 @@ class player:
         self.score = 0
         self.opponent_score = 0
 
-        #Critic Model
+        # Critic Model
         # Looks at state and thinks its a good state for actor or not
         self.Critic_model = Sequential()
         self.Critic_model.add(Dense(9, input_shape=(2, 3, 3), activation='relu'))
         self.Critic_model.add(Flatten())
         self.Critic_model.add(Dense(9, activation='relu'))
-        self.Critic_model.add(Dense(1, activation='linear'))
+        self.Critic_model.add(Dense(9, activation='relu'))
+        self.Critic_model.add(Dense(1, activation='relu'))
         self.Critic_model.compile(
             optimizer='adam',
             loss='mean_absolute_error',
@@ -35,9 +36,11 @@ class player:
         # Actor trained on wins
         self.Actor_model = Sequential()
         self.Actor_model.add(Dense(9, input_shape=(2, 3, 3), activation='relu'))
+        self.Actor_model.add(Dense(9, activation='relu'))
         self.Actor_model.add(Flatten())
         self.Actor_model.add(Dense(9, activation='relu'))
-        self.Actor_model.add(Dense(2, activation='tanh'))
+        self.Actor_model.add(Dense(9, activation='relu'))
+        self.Actor_model.add(Reshape((3, 3)))
         self.Actor_model.compile(
             optimizer='adam',
             loss='mean_absolute_error',
@@ -55,10 +58,25 @@ class player:
         print(train_x.dtype)
         print(train_y.dtype)
         print(train_x.shape)
-
         print(train_y.shape)
 
-        self.Critic_model.fit(train_x, train_y,  validation_data=(validation_x, validation_y), epochs= 5)
+        self.Critic_model.fit(train_x, train_y,  validation_data=(validation_x, validation_y), epochs=10)
+        self.Critic_model.save('/mnt/96a66be0-609e-43bd-a076-253e3c725b17/Python/RL testing/save_models/TTT2D_Critic')
+
+    def teach_actor(self, state, move):
+        div = int((len(state) * 0.7))
+        train_x = np.copy(state[:div]).astype('float64')
+        validation_x = np.copy(state[div:]).astype('float64')
+        train_y = np.copy(move[:div]).astype('float64')
+        validation_y = np.copy(move[div:]).astype('float64')
+
+        print(train_x.dtype)
+        print(train_y.dtype)
+        print(train_x.shape)
+        print(train_y.shape)
+
+        self.Actor_model.fit(train_x, train_y, validation_data=(validation_x, validation_y), epochs=15)
+        self.Actor_model.save('/mnt/96a66be0-609e-43bd-a076-253e3c725b17/Python/RL testing/save_models/TTT2D_actor')
 
 class board_env:
     def __init__(self):
@@ -83,7 +101,13 @@ class board_env:
         self.whose_turn = True
         # -1 = O and 1 = X
         # false = 0 and true = X
+        self.empty_board = np.array([
+            [0, 0, 0],
+            [0, 0, 0],
+            [0, 0, 0]
+        ])
         self.reset()
+
 
 
     def reset(self):
@@ -91,6 +115,11 @@ class board_env:
             |0|0|0|     How the board starts
             |0|0|0|'''
         self.board = np.array([
+            [0, 0, 0],
+            [0, 0, 0],
+            [0, 0, 0]
+        ])
+        self.empty_board = np.array([
             [0, 0, 0],
             [0, 0, 0],
             [0, 0, 0]
@@ -337,6 +366,7 @@ class board_env:
             # Computers turn
             # print("Computer's turn")
             while True:
+                # if verbose: print(self.p1.Actor_model.predict(np.array([[self.board, self.previous_board]]))[0])
                 move = [0,0]
                 if random_play:
                     random.seed(time.time_ns())
@@ -344,6 +374,7 @@ class board_env:
                     move[1] = random.randint(-1, 1)
                 else:
                     pass
+                    # move = tf.round(self.p1.Actor_model.predict(np.array([[self.board, self.previous_board]]))[0])
                 move1 = move.copy()
                 x = -1
                 for axis in move1:
@@ -372,7 +403,8 @@ class board_env:
             # for actor
             if not self.whose_turn:
                 self.round_buffer.append([self.board, self.previous_board])
-                self.move_buffer.append(move1)
+                self.empty_board[move1[1]][move1[0]] = 1
+                self.move_buffer.append(self.empty_board)
 
             done, winner_ = self.look_for_win()
             if done:
@@ -380,19 +412,21 @@ class board_env:
                     self.p1.score += 1
                 else:
                     self.p1.opponent_score += 1
-                if not verbose:
-                    self.reset()
 
                 if winner_ == -1:
+                    if verbose:
+                        print(self.round_buffer)
+                        print(self.move_buffer)
                     self.actor_training.extend(self.round_buffer)
                     self.actor_moves.extend(self.move_buffer)
                 self.round_buffer.clear()
                 self.move_buffer.clear()
 
+                self.reset()
+
         # end of turn
         self.whose_turn = not self.whose_turn
         self.previous_board = np.copy(self.board)
-
 
 
 b1 = board_env()
@@ -400,10 +434,11 @@ b1 = board_env()
 learning = True
 how_much_off = []
 while True:
-    if b1.games_played > 30000:
+    if b1.games_played > 50000:
         if learning:
             print(f"{b1.p1.score} V.S. {b1.p1.opponent_score}")
             b1.p1.teach_critc(b1.recorded_games, b1.recorded_scores)
+            b1.p1.teach_actor(b1.actor_training, b1.actor_moves)
             learning = False
 
         b1.get_state(human=b1.whose_turn, random_play=True, verbose=True)
@@ -429,6 +464,8 @@ while True:
             plt.show()
             how_much_off = []
 
+    elif b1.games_played % 5000 == 0:
+        b1.get_state(human=False, random_play=True, verbose=True)
 
     else:
         b1.get_state(human=False, random_play=True)
