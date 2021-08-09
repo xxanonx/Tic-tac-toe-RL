@@ -53,12 +53,13 @@ class player:
         self.Actor_model.summary()
 
     def teach_critc(self, state, value):
-        if not self.do_not_init: self.init_critic()
+        if not self.do_not_init:
+            self.init_critic()
         div = int((len(state) * 0.7))
-        train_x = np.copy(state[:div]).astype('float64')
-        validation_x = np.copy(state[div:]).astype('float64')
-        train_y = np.copy(value[:div]).astype('float64')
-        validation_y = np.copy(value[div:]).astype('float64')
+        train_x = np.copy(state[:div]).astype('float32')
+        validation_x = np.copy(state[div:]).astype('float32')
+        train_y = np.copy(value[:div]).astype('float32')
+        validation_y = np.copy(value[div:]).astype('float32')
 
         print(train_x.dtype)
         print(train_y.dtype)
@@ -68,16 +69,18 @@ class player:
         print(train_x)
         print(train_y)
 
-        self.Critic_model.fit(train_x, train_y,  validation_data=(validation_x, validation_y), epochs=10)
+        self.Critic_model.fit(train_x, train_y,  validation_data=(validation_x, validation_y), epochs=5)
         self.Critic_model.save('/mnt/96a66be0-609e-43bd-a076-253e3c725b17/Python/RL testing/save_models/TTT2D_Critic')
 
     def teach_actor(self, state, move):
-        if not self.do_not_init: self.init_actor()
+        if not self.do_not_init:
+            self.init_actor()
+            self.do_not_init = True
         div = int((len(state) * 0.7))
-        train_x = np.copy(state[:div]).astype('float64')
-        validation_x = np.copy(state[div:]).astype('float64')
-        train_y = np.copy(move[:div]).astype('float64')
-        validation_y = np.copy(move[div:]).astype('float64')
+        train_x = np.copy(state[:div]).astype('float32')
+        validation_x = np.copy(state[div:]).astype('float32')
+        train_y = np.copy(move[:div]).astype('float32')
+        validation_y = np.copy(move[div:]).astype('float32')
 
         print(train_x.dtype)
         print(train_y.dtype)
@@ -87,7 +90,7 @@ class player:
         print(train_x)
         print(train_y)
 
-        self.Actor_model.fit(train_x, train_y, validation_data=(validation_x, validation_y), epochs=15)
+        self.Actor_model.fit(train_x, train_y, validation_data=(validation_x, validation_y), epochs=10)
         self.Actor_model.save('/mnt/96a66be0-609e-43bd-a076-253e3c725b17/Python/RL testing/save_models/TTT2D_actor')
 
     def load_models(self):
@@ -429,45 +432,51 @@ class board_env:
         else:
             # Computers turn
             # print("Computer's turn")
+            ai_can_skip = False
+            move = [0, 0]
             while True:
                 self.current_board = np.copy(self.board)
                 if verbose:
                     # print([self.current_board, self.previous_board])
                     if not self.whose_turn:
-                        print(f"NN Value for O's: {self.p1.Critic_model.predict(np.array([[self.current_board, self.previous_board_O, self.neg_ones]]))}")
+                        print(f"NN Value for O's: {self.p1.Critic_model.predict(np.array([[self.current_board.astype('float32'), self.previous_board_O.astype('float32'), self.neg_ones]]))}")
                         print(self.p1.Actor_model.predict(
-                            np.array([[self.current_board, self.previous_board_O, self.neg_ones]]))[0])
+                            np.array([[self.current_board.astype('float32'), self.previous_board_O.astype('float32'), self.neg_ones]]))[0])
                     else:
-                        print(f"NN Value for X's: {self.p1.Critic_model.predict(np.array([[self.current_board, self.previous_board_X, self.ones]]))}")
+                        print(f"NN Value for X's: {self.p1.Critic_model.predict(np.array([[self.current_board.astype('float32'), self.previous_board_X.astype('float32'), self.ones.astype('float32')]]))}")
                         print(self.p1.Actor_model.predict(
-                            np.array([[self.current_board, self.previous_board_X, self.ones]]))[0])
+                            np.array([[self.current_board.astype('float32'), self.previous_board_X.astype('float32'), self.ones.astype('float32')]]))[0])
 
-                move = [0,0]
-                ai_can_skip = False
                 if random_play:
                     random.seed(time.time_ns())
                     move[0] = random.randint(-1, 1)
                     move[1] = random.randint(-1, 1)
                 else:
-                    if not self.whose_turn:
+                    if ai_can_skip:
+                        pred[move[1]][move[0]] = 0
+                    elif not self.whose_turn:
                         pred = (self.p1.Actor_model.predict(
-                            np.array([[self.current_board, self.previous_board_O, self.neg_ones]]))[0])
+                            np.array([[self.current_board.astype('float32'), self.previous_board_O.astype('float32'), self.neg_ones.astype('float32')]]))[0])
                     else:
                         pred = (self.p1.Actor_model.predict(
-                            np.array([[self.current_board, self.previous_board_X, self.ones]]))[0])
+                        np.array([[self.current_board.astype('float32'), self.previous_board_X.astype('float32'), self.ones.astype('float32')]]))[0])
                     if verbose:
                         print('Algorithm playing!')
-                        print(pred)
+                        # print(pred)
                     if pred.any():
                         ai_y = 0
                         max = pred.ravel().max()
                         for row in pred:
-                            row_max = row[int(tf.argmax(row))]
-                            if row_max == max:
+                            row_max = int(tf.argmax(row))
+                            if row[row_max] == max:
                                 ai_can_skip = True
-                                move = [(int(tf.argmax(row))), ai_y]
+                                move = [row_max, ai_y]
                                 break
                             ai_y += 1
+                    else:
+                        random.seed(time.time_ns())
+                        move[0] = random.randint(-1, 1)
+                        move[1] = random.randint(-1, 1)
 
                 move1 = move.copy()
                 if not ai_can_skip:
@@ -488,7 +497,7 @@ class board_env:
                     # print(move1)
                 if ((move1[0] != move[0]) and (move1[1] != move[1])) or ai_can_skip:
                     if self.make_move(move1[0], move1[1]):
-                        if not random_play and ai_can_skip:
+                        if not random_play and ai_can_skip and verbose:
                             print(f"{move} is acceptable")
                         break
 
@@ -509,8 +518,16 @@ class board_env:
             self.move_buffer_O.clear()
             self.round_buffer_X.clear()
             self.move_buffer_X.clear()
-            if not verbose:
-                self.reset()
+            if verbose:
+                print(self.board)
+                if winner_ == -1:
+                    print("O's WON!!!")
+                elif winner_ == 1:
+                    print("X's WON!!!!")
+                else:
+                    print("DRAW")
+
+            self.reset()
 
         # end of turn
         self.whose_turn = not self.whose_turn
@@ -524,60 +541,68 @@ learning = False
 # how_much_off = []
 human_O = False
 one_shot = False
-b1.p1.load_models()
+# b1.p1.load_models()
+step = 1
 while True:
-    if b1.games_played > 10:
+    if b1.games_played % 100000 == 0 and b1.games_played > 0:
         if learning:
-            print(f"{b1.p1.score} V.S. {b1.p1.opponent_score}")
             b1.p1.teach_critc(b1.recorded_games, b1.recorded_scores)
             b1.p1.teach_actor(b1.actor_training, b1.actor_moves)
             learning = False
+            print(f"{b1.p1.score} V.S. {b1.p1.opponent_score}")
+            print(f"Step Number is: {step}")
+            step += 1
 
-        if b1.games_played > 0:
+            '''if b1.games_played > 0:
             if b1.games_played % 2 == 0:
                 if not one_shot:
                     human_O = not human_O
                 one_shot = True
             else:
-                one_shot = False
-            if human_O:
-                b1.get_state(human=not b1.whose_turn, random_play=False, verbose=True)
-            else:
-                b1.get_state(human=b1.whose_turn, random_play=False, verbose=True)
+                one_shot = False'''
+        if step % 2 == 0:
+            b1.get_state(human=not b1.whose_turn, random_play=False, verbose=True)
         else:
-            b1.get_state(human=b1.whose_turn, random_play=True, verbose=True)
+            b1.get_state(human=b1.whose_turn, random_play=False, verbose=True)
+            '''else:
+            b1.get_state(human=b1.whose_turn, random_play=True, verbose=True)'''
 
-        game_over, winner = b1.look_for_win()
-        # AI_predicted = b1.
-        '''Calculated_o = b1.value_of_board(game_over, b1.whose_turn, -1)
-        how_much_off.append(Calculated_o - AI_predicted[0][0])
-        print(f"Calculated X Value: {b1.value_of_board(game_over, not b1.whose_turn)}, Calculated O Value: {Calculated_o}")
-        print(f"Ai Value for O's: {AI_predicted[0][0]}, it is {how_much_off[-1]} off")'''
-
-        if game_over:
-            print(b1.board)
-            if winner == -1:
-                print("Computer WON!!!")
-            elif winner == 1:
-                print("Person WON!!!!")
-            else:
-                print("DRAW")
-            b1.reset()
-
-            '''plt.plot(how_much_off)
-            plt.show()
-            how_much_off = []'''
-        ''' if not learning:
+    else:
+        if not learning:
             b1.actor_training.clear()
             b1.actor_moves.clear()
             b1.recorded_games.clear()
-            b1.recorded_scores.clear()'''
-    else:
-        b1.get_state(human=False, random_play=b1.whose_turn, verbose=True)
-        game_over, winner = b1.look_for_win()
-        if game_over:
-            print(f'{winner} won!')
-            b1.reset()
-        # learning = True
-        print(b1.board)
-        time.sleep(1)
+            b1.recorded_scores.clear()
+
+        if step > 1 and b1.games_played % 20 == 0:
+            if not one_shot:
+                human_O = not human_O
+            one_shot = True
+        else:
+            one_shot = False
+
+        # steps of progressive learning
+        if step <= 1:
+            b1.get_state(human=False, random_play=True, verbose=False)
+
+        elif step < 6:
+            random.seed(time.time_ns())
+            if human_O:
+                b1.get_state(human=False, random_play=(b1.whose_turn or (not b1.whose_turn and (random.randint(0, step) == 0))), verbose=False)
+            else:
+                b1.get_state(human=False, random_play=(not b1.whose_turn or (b1.whose_turn and (random.randint(0, step) == 0))), verbose=False)
+
+        elif step > 6:
+            if human_O:
+                b1.get_state(human=False, random_play=b1.whose_turn, verbose=True)
+            else:
+                b1.get_state(human=False, random_play=not b1.whose_turn, verbose=True)
+            game_over, winner = b1.look_for_win()
+            if game_over:
+                print(f'{winner} won!')
+                b1.reset()
+            print(b1.board)
+            time.sleep(1)
+
+        if b1.games_played % 1000 == 0: print(b1.games_played)
+        learning = True
