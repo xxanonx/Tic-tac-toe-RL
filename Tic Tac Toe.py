@@ -98,10 +98,11 @@ class player:
     def load_models(self):
         self.Critic_model = load_model(
             '/mnt/96a66be0-609e-43bd-a076-253e3c725b17/Python/RL testing/save_models/TTT2D_Critic')
-        self.Critic_model.summary()
-        # self.Actor_model = load_model(
-        #    '/mnt/96a66be0-609e-43bd-a076-253e3c725b17/Python/RL testing/save_models/TTT2D_actor')
-        # self.do_not_init = True
+        # self.Critic_model.summary()
+        self.do_not_init_c = True
+        self.Actor_model = load_model(
+            '/mnt/96a66be0-609e-43bd-a076-253e3c725b17/Python/RL testing/save_models/TTT2D_actor')
+        self.do_not_init_a = True
 
 
 class board_env:
@@ -585,10 +586,10 @@ learning = False
 # how_much_off = []
 human_O = False
 one_shot = False
-# b1.p1.load_models()
-step = 0
+b1.p1.load_models()
+step = 1
 while True:
-    if b1.games_played % 50000 == 0 and b1.games_played > 0:
+    if 5> b1.games_played % 50000 > 0 and b1.games_played > 100:
         if learning:
             b1.p1.teach_critc(b1.recorded_games, b1.recorded_scores)
             if step > 0:
@@ -610,6 +611,9 @@ while True:
                 b1.get_state(human=not b1.whose_turn, random_play=False, verbose=True)
             else:
                 b1.get_state(human=b1.whose_turn, random_play=False, verbose=True)
+
+        else:
+            b1.get_state(human=False, random_play=b1.whose_turn, verbose=True)
 
     else:
         if not learning:
