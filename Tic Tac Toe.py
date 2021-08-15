@@ -352,7 +352,7 @@ class board_env:
                     move2 = np.copy(self.empty_board)
                     move2[y][x] = 1
                     if value_calc_o != 0:
-                        value_of_board = self.p1.Critic_model.predict(np.array([[self.current_board.astype('float32'),
+                        value_of_board = self.p1.Critic_model(np.array([[self.current_board.astype('float32'),
                                                                                 self.previous_board_O.astype('float32'),
                                                                                 self.neg_ones.astype('float32')]]))
                         value_layer = np.ones((3,3)) * value_of_board[0][0]
@@ -376,7 +376,7 @@ class board_env:
                     move2 = np.copy(self.empty_board)
                     move2[y][x] = 1
                     if value_calc_x != 0:
-                        value_of_board = self.p1.Critic_model.predict(np.array([[self.current_board.astype('float32'),
+                        value_of_board = self.p1.Critic_model(np.array([[self.current_board.astype('float32'),
                                                                                 self.previous_board_X.astype('float32'),
                                                                                 self.ones.astype('float32')]]))
                         value_layer = (np.ones((3, 3)) * value_of_board[0][0])
@@ -457,22 +457,22 @@ class board_env:
                 if verbose:
                     # print([self.current_board, self.previous_board])
                     if not self.whose_turn:
-                        c_predict = self.p1.Critic_model.predict(np.array([[self.current_board.astype('float32'),
+                        c_predict = self.p1.Critic_model(np.array([[self.current_board.astype('float32'),
                                                                             self.previous_board_O.astype('float32'),
                                                                             self.neg_ones.astype('float32')]]))
                         value_layer = (np.ones((3, 3)) * c_predict[0][0])
-                        a_predict = self.p1.Actor_model.predict(np.array([[self.current_board.astype('float32'),
+                        a_predict = self.p1.Actor_model(np.array([[self.current_board.astype('float32'),
                                                                            self.previous_board_O.astype('float32'),
                                                                            self.neg_ones.astype('float32'),
                                                                            value_layer.astype('float32')]]))[0]
                         print(f"NN Value for O's: {c_predict}")
                         print(a_predict)
                     else:
-                        c_predict = self.p1.Critic_model.predict(np.array([[self.current_board.astype('float32'),
+                        c_predict = self.p1.Critic_model(np.array([[self.current_board.astype('float32'),
                                                                             self.previous_board_X.astype('float32'),
                                                                             self.ones.astype('float32')]]))
                         value_layer = (np.ones((3, 3)) * c_predict[0][0])
-                        a_predict = self.p1.Actor_model.predict(np.array([[self.current_board.astype('float32'),
+                        a_predict = self.p1.Actor_model(np.array([[self.current_board.astype('float32'),
                                                                            self.previous_board_X.astype('float32'),
                                                                            self.ones.astype('float32'),
                                                                            value_layer.astype('float32')]]))[0]
@@ -488,20 +488,20 @@ class board_env:
                     if ai_can_skip:
                         pred[move[1]][move[0]] = 0
                     elif not self.whose_turn:
-                        c_predict = self.p1.Critic_model.predict(np.array([[self.current_board.astype('float32'),
+                        c_predict = self.p1.Critic_model(np.array([[self.current_board.astype('float32'),
                                                                             self.previous_board_O.astype('float32'),
                                                                             self.neg_ones.astype('float32')]]))
                         value_layer = (np.ones((3, 3)) * c_predict[0][0])
-                        pred = (self.p1.Actor_model.predict(np.array([[self.current_board.astype('float32'),
+                        pred = (self.p1.Actor_model(np.array([[self.current_board.astype('float32'),
                                                                        self.previous_board_O.astype('float32'),
                                                                        self.neg_ones.astype('float32'),
                                                                        value_layer.astype('float32')]]))[0])
                     else:
-                        c_predict = self.p1.Critic_model.predict(np.array([[self.current_board.astype('float32'),
+                        c_predict = self.p1.Critic_model(np.array([[self.current_board.astype('float32'),
                                                                             self.previous_board_X.astype('float32'),
                                                                             self.ones.astype('float32')]]))
                         value_layer = (np.ones((3, 3)) * c_predict[0][0])
-                        pred = (self.p1.Actor_model.predict(np.array([[self.current_board.astype('float32'),
+                        pred = (self.p1.Actor_model(np.array([[self.current_board.astype('float32'),
                                                                        self.previous_board_X.astype('float32'),
                                                                        self.ones.astype('float32'),
                                                                        value_layer.astype('float32')]]))[0])
@@ -587,6 +587,9 @@ learning = False
 human_O = False
 one_shot = False
 b1.p1.load_models()
+one_shot_1000 = False
+start_time = time.perf_counter()
+
 step = 1
 while True:
     if 5> b1.games_played % 50000 > 0 and b1.games_played > 100:
@@ -647,5 +650,11 @@ while True:
                 b1.get_state(human=False, random_play=not b1.whose_turn, verbose=True)
             time.sleep(1)
 
-        if b1.games_played % 1000 == 0: print(b1.games_played)
+        if b1.games_played % 1000 == 0 and not one_shot_1000:
+            one_shot_1000 = True
+            print(b1.games_played)
+            print(f"Time it took the last 1000 plays: {(time.perf_counter() - start_time)}")
+            start_time = time.perf_counter()
+        elif b1.games_played % 1000 == 1 and one_shot_1000:
+            one_shot_1000 = False
         learning = True
