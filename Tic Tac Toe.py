@@ -548,14 +548,15 @@ class board_env:
         done, winner_ = self.look_for_win()
         if done:
             self.make_move(0, 0, just_data=True)
+            value_board = self.value_of_board(done, True, symbol=winner_)
             if self.p1.sign == winner_:
                 self.p1.score += 1
             else:
                 self.p1.opponent_score += 1
-            if winner_ == -1:
-                self.actor_training.extend(self.round_buffer_O)
-                self.actor_moves.extend(self.move_buffer_O)
-            elif winner_ == 1:
+            if winner_ == -1 and value_board > 0.5:
+                    self.actor_training.extend(self.round_buffer_O)
+                    self.actor_moves.extend(self.move_buffer_O)
+            elif winner_ == 1 and value_board > 0.5:
                 self.actor_training.extend(self.round_buffer_X)
                 self.actor_moves.extend(self.move_buffer_X)
             self.round_buffer_O.clear()
@@ -589,9 +590,9 @@ b1.p1.load_models()
 one_shot_1000 = False
 start_time = time.perf_counter()
 
-step = 2
+step = 9
 while True:
-    if 5> b1.games_played % 50000 > 0 and b1.games_played > 100:
+    if 5> b1.games_played % 50000 > 0 and b1.games_played > 100 or step > 9:
         if learning:
             b1.p1.teach_critc(b1.recorded_games, b1.recorded_scores)
             if step > 0:
@@ -644,10 +645,10 @@ while True:
 
         elif step > 8:
             if human_O:
-                b1.get_state(human=False, random_play=(random.randint(0, int(step/2)) == 0), verbose=True)
+                b1.get_state(human=False, random_play=(random.randint(0, int(step/2)) == 0), verbose=False)
             else:
-                b1.get_state(human=False, random_play=(random.randint(0, int(step/2)) == 0), verbose=True)
-            time.sleep(1)
+                b1.get_state(human=False, random_play=(random.randint(0, int(step/2)) == 0), verbose=False)
+            # time.sleep(1)
 
         if b1.games_played % 1000 == 0 and not one_shot_1000:
             one_shot_1000 = True
