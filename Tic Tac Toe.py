@@ -354,7 +354,7 @@ class board_env:
                     if value_calc_o != 0:
                         value_of_board = self.p1.Critic_model(np.array([[self.current_board.astype('float32'),
                                                                                 self.previous_board_O.astype('float32'),
-                                                                                self.neg_ones.astype('float32')]]))
+                                                                                self.neg_ones.astype('float32')]])).numpy()
                         value_layer = np.ones((3,3)) * value_of_board[0][0]
                     else:
                         value_layer = np.zeros((3, 3))
@@ -378,7 +378,7 @@ class board_env:
                     if value_calc_x != 0:
                         value_of_board = self.p1.Critic_model(np.array([[self.current_board.astype('float32'),
                                                                                 self.previous_board_X.astype('float32'),
-                                                                                self.ones.astype('float32')]]))
+                                                                                self.ones.astype('float32')]])).numpy()
                         value_layer = (np.ones((3, 3)) * value_of_board[0][0])
                     else:
                         value_layer = np.zeros((3,3))
@@ -422,8 +422,7 @@ class board_env:
                 move = input("what is your move? ")
                 move1 = move.split(",")
                 move2 = move.split(",")
-                if ("," in move) and (5 >= len(move) >= 3) \
-                        and ((move1[0].isdigit() or move1[0] == "-1") and (move1[1].isdigit() or move1[1] == "-1")):
+                if ("," in move) and (5 >= len(move) >= 3) and ((move1[0].isdigit() or move1[0] == "-1") and (move1[1].isdigit() or move1[1] == "-1")):
                     x = -1
                     # print(move1)
                     for axis in move1:
@@ -459,23 +458,23 @@ class board_env:
                     if not self.whose_turn:
                         c_predict = self.p1.Critic_model(np.array([[self.current_board.astype('float32'),
                                                                             self.previous_board_O.astype('float32'),
-                                                                            self.neg_ones.astype('float32')]]))
+                                                                            self.neg_ones.astype('float32')]])).numpy()
                         value_layer = (np.ones((3, 3)) * c_predict[0][0])
-                        a_predict = self.p1.Actor_model(np.array([[self.current_board.astype('float32'),
+                        a_predict = (self.p1.Actor_model(np.array([[self.current_board.astype('float32'),
                                                                            self.previous_board_O.astype('float32'),
                                                                            self.neg_ones.astype('float32'),
-                                                                           value_layer.astype('float32')]]))[0]
+                                                                           value_layer.astype('float32')]]))[0]).numpy()
                         print(f"NN Value for O's: {c_predict}")
                         print(a_predict)
                     else:
                         c_predict = self.p1.Critic_model(np.array([[self.current_board.astype('float32'),
                                                                             self.previous_board_X.astype('float32'),
-                                                                            self.ones.astype('float32')]]))
+                                                                            self.ones.astype('float32')]])).numpy()
                         value_layer = (np.ones((3, 3)) * c_predict[0][0])
-                        a_predict = self.p1.Actor_model(np.array([[self.current_board.astype('float32'),
+                        a_predict = (self.p1.Actor_model(np.array([[self.current_board.astype('float32'),
                                                                            self.previous_board_X.astype('float32'),
                                                                            self.ones.astype('float32'),
-                                                                           value_layer.astype('float32')]]))[0]
+                                                                           value_layer.astype('float32')]]))[0]).numpy()
 
                         print(f"NN Value for X's: {c_predict}")
                         print(a_predict)
@@ -490,21 +489,21 @@ class board_env:
                     elif not self.whose_turn:
                         c_predict = self.p1.Critic_model(np.array([[self.current_board.astype('float32'),
                                                                             self.previous_board_O.astype('float32'),
-                                                                            self.neg_ones.astype('float32')]]))
+                                                                            self.neg_ones.astype('float32')]])).numpy()
                         value_layer = (np.ones((3, 3)) * c_predict[0][0])
                         pred = (self.p1.Actor_model(np.array([[self.current_board.astype('float32'),
                                                                        self.previous_board_O.astype('float32'),
                                                                        self.neg_ones.astype('float32'),
-                                                                       value_layer.astype('float32')]]))[0])
+                                                                       value_layer.astype('float32')]]))[0]).numpy()
                     else:
                         c_predict = self.p1.Critic_model(np.array([[self.current_board.astype('float32'),
                                                                             self.previous_board_X.astype('float32'),
-                                                                            self.ones.astype('float32')]]))
+                                                                            self.ones.astype('float32')]])).numpy()
                         value_layer = (np.ones((3, 3)) * c_predict[0][0])
                         pred = (self.p1.Actor_model(np.array([[self.current_board.astype('float32'),
                                                                        self.previous_board_X.astype('float32'),
                                                                        self.ones.astype('float32'),
-                                                                       value_layer.astype('float32')]]))[0])
+                                                                       value_layer.astype('float32')]]))[0]).numpy()
                     if verbose:
                         print('Algorithm playing!')
                         # print(pred)
@@ -590,7 +589,7 @@ b1.p1.load_models()
 one_shot_1000 = False
 start_time = time.perf_counter()
 
-step = 1
+step = 2
 while True:
     if 5> b1.games_played % 50000 > 0 and b1.games_played > 100:
         if learning:
@@ -609,7 +608,7 @@ while True:
                 one_shot = True
             else:
                 one_shot = False'''
-        if step > 2:
+        if step > 8:
             if step % 2 == 0:
                 b1.get_state(human=not b1.whose_turn, random_play=False, verbose=True)
             else:
@@ -636,7 +635,7 @@ while True:
         if step <= 1:
             b1.get_state(human=False, random_play=True, verbose=False)
 
-        elif step < 8:
+        elif step <= 8:
             random.seed(time.time_ns())
             if human_O:
                 b1.get_state(human=False, random_play=(b1.whose_turn or (not b1.whose_turn and (random.randint(0, step) == 0))), verbose=False)
@@ -645,9 +644,9 @@ while True:
 
         elif step > 8:
             if human_O:
-                b1.get_state(human=False, random_play=b1.whose_turn, verbose=True)
+                b1.get_state(human=False, random_play=(random.randint(0, int(step/2)) == 0), verbose=True)
             else:
-                b1.get_state(human=False, random_play=not b1.whose_turn, verbose=True)
+                b1.get_state(human=False, random_play=(random.randint(0, int(step/2)) == 0), verbose=True)
             time.sleep(1)
 
         if b1.games_played % 1000 == 0 and not one_shot_1000:
