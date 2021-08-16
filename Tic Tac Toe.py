@@ -590,7 +590,7 @@ b1.p1.load_models()
 one_shot_1000 = False
 start_time = time.perf_counter()
 
-step = 9
+step = 3
 while True:
     if 5> b1.games_played % 50000 > 0 and b1.games_played > 100 or step > 9:
         if learning:
