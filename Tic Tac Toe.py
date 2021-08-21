@@ -13,7 +13,7 @@ config.gpu_options.allow_growth = True
 session = tf.compat.v1.InteractiveSession(config=config)
 
 
-class player:
+class Player:
     def __init__(self, sign=1):
         self.sign = sign
         self.score = 0
@@ -105,9 +105,9 @@ class player:
         self.do_not_init_a = True
 
 
-class board_env:
+class BoardEnv:
     def __init__(self):
-        self.p1 = player(-1)
+        self.p1 = Player(-1)
         # For actor
         self.round_buffer_O = []
         self.move_buffer_O = []
@@ -580,7 +580,7 @@ class board_env:
 
 # BUFFER ZONE
 
-b1 = board_env()
+b1 = BoardEnv()
 # print(b1.board)
 learning = False
 # how_much_off = []

@@ -2,20 +2,63 @@
 #   goal: use tic tac toe game that is played on computer to work on raspberry pi using TF Lite
 
 import numpy as np
-import board
-import neopixel
-import tflite_runtime as tflite
+# import board
+# import neopixel
+# import tflite_runtime as tflite
+from tensorflow import lite as tflite
 import random, time
-# import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
+
+def map_range(x, from_low, from_high, to_low, to_high):
+    pass
+
+def model_predict(model_int, input_array, verbose=False):
+    # set up input
+    input_details = model_int.get_input_details()[0]
+    if verbose:
+        print(input_array.dtype)
+        print(input_array.shape)
+        print(input_array)
+        print(input_details)
+    model_int.set_tensor(input_details['index'], input_array)
+
+    # predict
+    model_int.invoke()
+
+    # get output
+    output_details = model_int.get_output_details()[0]
+    output = np.squeeze(model_int.get_tensor(output_details['index']))
+
+    if verbose:
+        print(output_details)
+        print(output)
+        model_vis = []
+        largest_layer = 0
+        for i in range(output_details['index'] + 1):
+            layer = np.array(model_int.get_tensor(i)).ravel()
+            if layer.dtype == 'float32' and layer.max <= 1.0 and layer.min >= -1.0:
+                if layer.size > largest_layer:
+                    largest_layer = layer.size
+                # would like to map layer between 0 and 255 first
+                model_vis.append(layer)
+                print(i)
+                print(layer)
+
+        # then iterate through model visual and pad every layer to the largest layer centering the actual values
+
+    return output
 
 
 class Player:
-    def __init__(self):
-        tflite_critic_model = '/mnt/96a66be0-609e-43bd-a076-253e3c725b17/Python/RL testing/save_models/TTT2D_Critic'
-        tflite_actor_model = '/mnt/96a66be0-609e-43bd-a076-253e3c725b17/Python/RL testing/save_models/TTT2D_actor'
+    def __init__(self, sign=1):
+        self.sign = sign
+        self.score = 0
+        self.opponent_score = 0
+        tflite_critic_model = '/mnt/96a66be0-609e-43bd-a076-253e3c725b17/Python/RL testing/save_models/citic_model.tflite'
+        tflite_actor_model = '/mnt/96a66be0-609e-43bd-a076-253e3c725b17/Python/RL testing/save_models/actor_model.tflite'
         # Load the TFLite model in TFLite Interpreter
-        self.critic_interpreter = tflite.Interpreter(model_content=tflite_critic_model)
-        self.actor_interpreter = tflite.Interpreter(model_content=tflite_actor_model)
+        self.critic_interpreter = tflite.Interpreter(tflite_critic_model)
+        self.actor_interpreter = tflite.Interpreter(tflite_actor_model)
 
         self.critic_interpreter.allocate_tensors()
         self.actor_interpreter.allocate_tensors()
@@ -29,32 +72,6 @@ class Player:
         self.critic_decode = self.critic_interpreter.get_signature_runner('decode')
         self.actor_encode = self.actor_interpreter.get_signature_runner('encode')
         self.actor_decode = self.actor_interpreter.get_signature_runner('decode')'''
-
-    def model_predict(self, model_int, input_array, verbose=False):
-        # set up input
-        input_details = model_int.get_input_details()[0]
-        input_tensor = model_int.tensor(input_details['index'])[0]
-        input_tensor[:, :] = input_array
-
-        # predict
-        model_int.invoke()
-
-        # get output
-        output_details = model_int.get_output_details()[0]
-        output = np.squeeze(model_int.get_tensor(output_details['index']))
-        '''# 'encoded' and 'decoded' are dictionaries with all outputs from the inference.
-               encoded = self.critic_encode(x=input_array)
-               decoded = self.critic_decode(x=encoded['encoded_result'])
-               if verbose:
-                   print('Input:', input_array)
-                   print('Encoded result:', encoded)
-                   print('Decoded result:', decoded)
-               return decoded'''
-        if verbose:
-            print(input_details)
-            print(output_details)
-            print(output)
-        return output
 
 
 class BoardEnv:
@@ -304,11 +321,11 @@ class BoardEnv:
                     move2 = np.copy(self.empty_board)
                     move2[y][x] = 1
                     if value_calc_o != 0:
-                        value_of_board = self.p1.model_predict(self.p1.critic_interpreter,
+                        value_of_board = model_predict(self.p1.critic_interpreter,
                                                                (np.array([[self.current_board.astype('float32'),
                                                                            self.previous_board_O.astype('float32'),
-                                                                           self.neg_ones.astype('float32')]])), True)
-                        value_layer = np.ones((3,3)) * value_of_board[0][0]
+                                                                           self.neg_ones.astype('float32')]])))
+                        value_layer = np.ones((3,3)) * value_of_board
                     else:
                         value_layer = np.zeros((3, 3))
                     self.move_buffer_O.append(move2)
@@ -329,11 +346,11 @@ class BoardEnv:
                     move2 = np.copy(self.empty_board)
                     move2[y][x] = 1
                     if value_calc_x != 0:
-                        value_of_board = self.p1.model_predict(self.p1.critic_interpreter,
+                        value_of_board = model_predict(self.p1.critic_interpreter,
                                                                (np.array([[self.current_board.astype('float32'),
                                                                            self.previous_board_X.astype('float32'),
-                                                                           self.ones.astype('float32')]])), True)
-                        value_layer = (np.ones((3, 3)) * value_of_board[0][0])
+                                                                           self.ones.astype('float32')]])))
+                        value_layer = (np.ones((3, 3)) * value_of_board)
                     else:
                         value_layer = np.zeros((3,3))
                     self.move_buffer_X.append(move2)
@@ -410,25 +427,25 @@ class BoardEnv:
                 if verbose:
                     # print([self.current_board, self.previous_board])
                     if not self.whose_turn:
-                        c_predict = self.p1.model_predict(self.p1.critic_interpreter, (np.array([[self.current_board.astype('float32'),
+                        c_predict = model_predict(self.p1.critic_interpreter, (np.array([[self.current_board.astype('float32'),
                                                                             self.previous_board_O.astype('float32'),
-                                                                            self.neg_ones.astype('float32')]])), True)
-                        value_layer = (np.ones((3, 3)) * c_predict[0][0])
-                        a_predict = (self.p1.Actor_model(np.array([[self.current_board.astype('float32'),
+                                                                            self.neg_ones.astype('float32')]])))
+                        value_layer = (np.ones((3, 3)) * c_predict)
+                        a_predict = model_predict(self.p1.actor_interpreter, (np.array([[self.current_board.astype('float32'),
                                                                            self.previous_board_O.astype('float32'),
                                                                            self.neg_ones.astype('float32'),
-                                                                           value_layer.astype('float32')]]))[0]).numpy()
+                                                                           value_layer.astype('float32')]])))
                         print(f"NN Value for O's: {c_predict}")
                         print(a_predict)
                     else:
-                        c_predict = self.p1.model_predict(self.p1.critic_interpreter, (np.array([[self.current_board.astype('float32'),
+                        c_predict = model_predict(self.p1.critic_interpreter, (np.array([[self.current_board.astype('float32'),
                                                                             self.previous_board_X.astype('float32'),
-                                                                            self.ones.astype('float32')]])), True)
-                        value_layer = (np.ones((3, 3)) * c_predict[0][0])
-                        a_predict = (self.p1.Actor_model(np.array([[self.current_board.astype('float32'),
+                                                                            self.ones.astype('float32')]])))
+                        value_layer = (np.ones((3, 3)) * c_predict)
+                        a_predict = model_predict(self.p1.actor_interpreter, (np.array([[self.current_board.astype('float32'),
                                                                            self.previous_board_X.astype('float32'),
                                                                            self.ones.astype('float32'),
-                                                                           value_layer.astype('float32')]]))[0]).numpy()
+                                                                           value_layer.astype('float32')]])))
 
                         print(f"NN Value for X's: {c_predict}")
                         print(a_predict)
@@ -441,23 +458,23 @@ class BoardEnv:
                     if ai_can_skip:
                         pred[move[1]][move[0]] = 0
                     elif not self.whose_turn:
-                        c_predict = self.p1.model_predict(self.p1.critic_interpreter, (np.array([[self.current_board.astype('float32'),
+                        c_predict = model_predict(self.p1.critic_interpreter, (np.array([[self.current_board.astype('float32'),
                                                                             self.previous_board_O.astype('float32'),
-                                                                            self.neg_ones.astype('float32')]])), True)
-                        value_layer = (np.ones((3, 3)) * c_predict[0][0])
-                        pred = (self.p1.Actor_model(np.array([[self.current_board.astype('float32'),
+                                                                            self.neg_ones.astype('float32')]])))
+                        value_layer = (np.ones((3, 3)) * c_predict)
+                        pred = model_predict(self.p1.actor_interpreter, (np.array([[self.current_board.astype('float32'),
                                                                        self.previous_board_O.astype('float32'),
                                                                        self.neg_ones.astype('float32'),
-                                                                       value_layer.astype('float32')]]))[0]).numpy()
+                                                                       value_layer.astype('float32')]])))
                     else:
-                        c_predict = self.p1.model_predict(self.p1.critic_interpreter, (np.array([[self.current_board.astype('float32'),
+                        c_predict = model_predict(self.p1.critic_interpreter, (np.array([[self.current_board.astype('float32'),
                                                                             self.previous_board_X.astype('float32'),
-                                                                            self.ones.astype('float32')]])), True)
-                        value_layer = (np.ones((3, 3)) * c_predict[0][0])
-                        pred = (self.p1.Actor_model(np.array([[self.current_board.astype('float32'),
+                                                                            self.ones.astype('float32')]])))
+                        value_layer = (np.ones((3, 3)) * c_predict)
+                        pred = model_predict(self.p1.actor_interpreter, (np.array([[self.current_board.astype('float32'),
                                                                        self.previous_board_X.astype('float32'),
                                                                        self.ones.astype('float32'),
-                                                                       value_layer.astype('float32')]]))[0]).numpy()
+                                                                       value_layer.astype('float32')]])))
                     if verbose:
                         print('Algorithm playing!')
                         # print(pred)
@@ -465,7 +482,7 @@ class BoardEnv:
                         ai_y = 0
                         max = pred.ravel().max()
                         for row in pred:
-                            row_max = int(tflite.argmax(row))
+                            row_max = int(np.argmax(row))
                             if row[row_max] == max:
                                 ai_can_skip = True
                                 move = [row_max, ai_y]
