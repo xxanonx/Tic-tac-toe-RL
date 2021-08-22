@@ -2,15 +2,33 @@
 #   goal: use tic tac toe game that is played on computer to work on raspberry pi using TF Lite
 
 import numpy as np
-# import board
-# import neopixel
-# import tflite_runtime as tflite
-from tensorflow import lite as tflite
+import board
+import neopixel
+import tflite_runtime as tflite
+# from tensorflow import lite as tflite
 import random, time
-import matplotlib.pyplot as plt
+from gpiozero import LED, Button
+# import matplotlib.pyplot as plt
+
+go_led = LED(23)
+pixel = neopixel.NeoPixel(board.D18, 9, pixel_order=neopixel.GRB)
+_b_xno = Button(2)
+_b_xz = Button(3)
+_b_xo = Button(4)
+_b_yno = Button(17)
+_b_yz = Button(27)
+_b_yo = Button(22)
+
+x_buttons = [_b_xno, _b_xz,_b_xo]
+y_buttons = [_b_yno, _b_yz, _b_yo]
+
+TERMINAL_INPUT = True
+X_COLOR = (255,0,0)
+O_COLOR = (0,0,255)
 
 def map_range(x, from_low, from_high, to_low, to_high):
-    pass
+    y = to_low + ((to_high - to_low) / (from_high - from_low)) * (x - from_low) 
+    return y
 
 def model_predict(model_int, input_array, verbose=False):
     # set up input
@@ -40,15 +58,16 @@ def model_predict(model_int, input_array, verbose=False):
                 if layer.size > largest_layer:
                     largest_layer = layer.size
                 # would like to map layer between 0 and 255 first
-                model_vis.append(layer)
+                # model_vis.append(layer)
                 print(i)
                 print(layer)
+        print(largest_layer)            
 
         # then iterate through model visual and pad every layer to the largest layer centering the actual values
 
     return output
-
-
+    
+        
 class Player:
     def __init__(self, sign=1):
         self.sign = sign
@@ -57,22 +76,12 @@ class Player:
         tflite_critic_model = '/mnt/96a66be0-609e-43bd-a076-253e3c725b17/Python/RL testing/save_models/citic_model.tflite'
         tflite_actor_model = '/mnt/96a66be0-609e-43bd-a076-253e3c725b17/Python/RL testing/save_models/actor_model.tflite'
         # Load the TFLite model in TFLite Interpreter
-        self.critic_interpreter = tflite.Interpreter(tflite_critic_model)
-        self.actor_interpreter = tflite.Interpreter(tflite_actor_model)
+        self.critic_interpreter = tflite.interpreter(tflite_critic_model)
+        self.actor_interpreter = tflite.interpreter(tflite_actor_model)
 
         self.critic_interpreter.allocate_tensors()
         self.actor_interpreter.allocate_tensors()
-        '''critic_signatures = self.critic_interpreter.get_signature_list()
-        actor_signatures = self.actor_interpreter.get_signature_list()
-        print('Signature:', critic_signatures)
-        print('Signature:', actor_signatures)
-
-        # encode and decode are callable with input as arguments.
-        self.critic_encode = self.critic_interpreter.get_signature_runner('encode')
-        self.critic_decode = self.critic_interpreter.get_signature_runner('decode')
-        self.actor_encode = self.actor_interpreter.get_signature_runner('encode')
-        self.actor_decode = self.actor_interpreter.get_signature_runner('decode')'''
-
+        
 
 class BoardEnv:
     def __init__(self):
@@ -367,6 +376,53 @@ class BoardEnv:
             return True
         else:
             return False
+    
+    def visualize_board(boardy, game_done, human=True):
+        vis_board = np.copy(boardy).ravel()
+        repeat = 1
+        if game_done:
+            repeat = 6
+        for r in range(repeat):
+            if game_done and repeat % 2 == 0:
+                pixel.fill((0,0,0))
+                time.sleep(1)
+            
+            else:
+                for box in range(vis_board.size):
+                    pix = box
+                    if box == 3:
+                        pix = 5
+                    elif box == 5:
+                        pix = 3
+                    
+                    elif vis_board[box] == -1:
+                        pixel[pix] = X_COLOR
+                    elif vis_board[box] == 1:
+                        pixel[pix] = O_COLOR
+                    else:
+                        pixel[pix] = (0,0,0)
+                        
+        pixel.show()
+        if not game_done:
+            x_in = False
+            y_in = False
+            while True:
+                if not x_in:
+                    xnum = -1
+                    for xbut in x_buttons:
+                        if xbut.is_pressed:
+                            x_in = True
+                            break
+                        xnum += 1
+                if not y_in:
+                    ynum = -1
+                    for ybut in y_buttons:
+                        if ybut.is_pressed:
+                            y_in = True
+                            break
+                        ynum += 1
+                if y_in and x_in:
+                    return f"{xnum},{yum}"
 
     def get_state(self, human=False, random_play=False, verbose=False):
         # Whose turn matters and human matters
@@ -390,7 +446,10 @@ class BoardEnv:
                         line += "   |"
                 print(line)
             while True:
-                move = input("what is your move? ")
+                if TERMINAL_INPUT:
+                    move = input("what is your move? ")
+                else:
+                    move = visualize_board(self.board, False, human)
                 move1 = move.split(",")
                 move2 = move.split(",")
                 if ("," in move) and (5 >= len(move) >= 3) and ((move1[0].isdigit() or move1[0] == "-1") and (move1[1].isdigit() or move1[1] == "-1")):
