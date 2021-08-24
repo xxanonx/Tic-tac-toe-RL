@@ -4,7 +4,7 @@
 import numpy as np
 import board
 import neopixel
-import tflite_runtime as tflite
+import tflite_runtime.interpreter as tflite
 # from tensorflow import lite as tflite
 import random, time
 from gpiozero import LED, Button
@@ -73,11 +73,11 @@ class Player:
         self.sign = sign
         self.score = 0
         self.opponent_score = 0
-        tflite_critic_model = '/mnt/96a66be0-609e-43bd-a076-253e3c725b17/Python/RL testing/save_models/citic_model.tflite'
-        tflite_actor_model = '/mnt/96a66be0-609e-43bd-a076-253e3c725b17/Python/RL testing/save_models/actor_model.tflite'
+        tflite_critic_model = 'save_models/citic_model.tflite'
+        tflite_actor_model = 'save_models/actor_model.tflite'
         # Load the TFLite model in TFLite Interpreter
-        self.critic_interpreter = tflite.interpreter(tflite_critic_model)
-        self.actor_interpreter = tflite.interpreter(tflite_actor_model)
+        self.critic_interpreter = tflite.Interpreter(tflite_critic_model)
+        self.actor_interpreter = tflite.Interpreter(tflite_actor_model)
 
         self.critic_interpreter.allocate_tensors()
         self.actor_interpreter.allocate_tensors()
