@@ -1,6 +1,6 @@
 #   started 08/18/2021
 #   goal: use tic tac toe game that is played on computer to work on raspberry pi using TF Lite
-
+import matplotlib.pyplot as plt
 import numpy as np
 import board
 import neopixel
@@ -26,11 +26,13 @@ TERMINAL_INPUT = True
 X_COLOR = (255,0,0)
 O_COLOR = (0,0,255)
 
-def map_range(x, from_low, from_high, to_low, to_high):
+
+def map_range(x, from_low=-1, from_high=1, to_low=0, to_high=255):
     y = to_low + ((to_high - to_low) / (from_high - from_low)) * (x - from_low) 
     return y
 
-def model_predict(model_int, input_array, verbose=False):
+
+def model_predict(model_int, input_array, verbose=True):
     # set up input
     input_details = model_int.get_input_details()[0]
     if verbose:
@@ -50,7 +52,7 @@ def model_predict(model_int, input_array, verbose=False):
     if verbose:
         print(output_details)
         print(output)
-        model_vis = []
+        model_vis1 = []
         largest_layer = 0
         for i in range(output_details['index'] + 1):
             layer = np.array(model_int.get_tensor(i)).ravel()
@@ -58,12 +60,26 @@ def model_predict(model_int, input_array, verbose=False):
                 if layer.size > largest_layer:
                     largest_layer = layer.size
                 # would like to map layer between 0 and 255 first
-                # model_vis.append(layer)
+                model_vis1.append(np.array(list(map(map_range, layer))))
                 print(i)
                 print(layer)
         print(largest_layer)            
 
         # then iterate through model visual and pad every layer to the largest layer centering the actual values
+        model_vis2 = []
+        for mapped_layer in model_vis1:
+            if mapped_layer.size < largest_layer:
+                left_over = (largest_layer - mapped_layer.size) % 2
+                left_side = ((largest_layer - left_over) - mapped_layer.size) / 2
+                right_side = left_side + left_over
+                padded_layer = np.pad(mapped_layer, (left_side,right_side), constant_values=0)
+                if padded_layer.size == largest_layer:
+                    model_vis2.append(padded_layer)
+                else:
+                    print("layer NOT added! ", padded_layer.size)
+        model_vis3 = np.array(model_vis2)
+        plt.imshow(model_vis3)
+        plt.show()
 
     return output
     
