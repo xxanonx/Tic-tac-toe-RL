@@ -1,6 +1,6 @@
 #   started 08/18/2021
 #   goal: use tic tac toe game that is played on computer to work on raspberry pi using TF Lite
-import matplotlib.pyplot as plt
+
 import numpy as np
 import board
 import neopixel
@@ -8,7 +8,7 @@ import tflite_runtime.interpreter as tflite
 # from tensorflow import lite as tflite
 import random, time
 from gpiozero import LED, Button
-# import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 
 go_led = LED(23)
 pixel = neopixel.NeoPixel(board.D18, 9, pixel_order=neopixel.GRB)
@@ -32,7 +32,7 @@ def map_range(x, from_low=-1, from_high=1, to_low=0, to_high=255):
     return y
 
 
-def model_predict(model_int, input_array, verbose=True):
+def model_predict(model_int, input_array, verbose=False):
     # set up input
     input_details = model_int.get_input_details()[0]
     if verbose:
@@ -56,28 +56,41 @@ def model_predict(model_int, input_array, verbose=True):
         largest_layer = 0
         for i in range(output_details['index'] + 1):
             layer = np.array(model_int.get_tensor(i)).ravel()
-            if layer.dtype == 'float32' and layer.max <= 1.0 and layer.min >= -1.0:
+            if layer.dtype == 'float32' and layer.max() <= 1.0 and layer.min() >= -1.0:
                 if layer.size > largest_layer:
                     largest_layer = layer.size
                 # would like to map layer between 0 and 255 first
-                model_vis1.append(np.array(list(map(map_range, layer))))
+                # model_vis1.append(np.array(list(map(map_range, layer))))
+                new_layer = []
+                for item in layer:
+                    if layer.size > 1:
+                        new_layer.append(map_range(item, layer.min(), layer.max()))
+                    else:
+                        new_layer.append(map_range(item))
+                model_vis1.append(np.array(new_layer))
+
                 print(i)
                 print(layer)
         print(largest_layer)            
+
+        # print(model_vis1)
 
         # then iterate through model visual and pad every layer to the largest layer centering the actual values
         model_vis2 = []
         for mapped_layer in model_vis1:
             if mapped_layer.size < largest_layer:
                 left_over = (largest_layer - mapped_layer.size) % 2
-                left_side = ((largest_layer - left_over) - mapped_layer.size) / 2
-                right_side = left_side + left_over
+                left_side = int(((largest_layer - left_over) - mapped_layer.size) / 2)
+                right_side = int(left_side + left_over)
                 padded_layer = np.pad(mapped_layer, (left_side,right_side), constant_values=0)
                 if padded_layer.size == largest_layer:
                     model_vis2.append(padded_layer)
                 else:
                     print("layer NOT added! ", padded_layer.size)
+            else:
+                model_vis2.append(mapped_layer)
         model_vis3 = np.array(model_vis2)
+        # print(model_vis3)
         plt.imshow(model_vis3)
         plt.show()
 
@@ -349,7 +362,7 @@ class BoardEnv:
                         value_of_board = model_predict(self.p1.critic_interpreter,
                                                                (np.array([[self.current_board.astype('float32'),
                                                                            self.previous_board_O.astype('float32'),
-                                                                           self.neg_ones.astype('float32')]])))
+                                                                           self.neg_ones.astype('float32')]])), False)
                         value_layer = np.ones((3,3)) * value_of_board
                     else:
                         value_layer = np.zeros((3, 3))
@@ -374,7 +387,7 @@ class BoardEnv:
                         value_of_board = model_predict(self.p1.critic_interpreter,
                                                                (np.array([[self.current_board.astype('float32'),
                                                                            self.previous_board_X.astype('float32'),
-                                                                           self.ones.astype('float32')]])))
+                                                                           self.ones.astype('float32')]])), False)
                         value_layer = (np.ones((3, 3)) * value_of_board)
                     else:
                         value_layer = np.zeros((3,3))
@@ -535,21 +548,21 @@ class BoardEnv:
                     elif not self.whose_turn:
                         c_predict = model_predict(self.p1.critic_interpreter, (np.array([[self.current_board.astype('float32'),
                                                                             self.previous_board_O.astype('float32'),
-                                                                            self.neg_ones.astype('float32')]])))
+                                                                            self.neg_ones.astype('float32')]])), False)
                         value_layer = (np.ones((3, 3)) * c_predict)
                         pred = model_predict(self.p1.actor_interpreter, (np.array([[self.current_board.astype('float32'),
                                                                        self.previous_board_O.astype('float32'),
                                                                        self.neg_ones.astype('float32'),
-                                                                       value_layer.astype('float32')]])))
+                                                                       value_layer.astype('float32')]])), False)
                     else:
                         c_predict = model_predict(self.p1.critic_interpreter, (np.array([[self.current_board.astype('float32'),
                                                                             self.previous_board_X.astype('float32'),
-                                                                            self.ones.astype('float32')]])))
+                                                                            self.ones.astype('float32')]])), False)
                         value_layer = (np.ones((3, 3)) * c_predict)
                         pred = model_predict(self.p1.actor_interpreter, (np.array([[self.current_board.astype('float32'),
                                                                        self.previous_board_X.astype('float32'),
                                                                        self.ones.astype('float32'),
-                                                                       value_layer.astype('float32')]])))
+                                                                       value_layer.astype('float32')]])), False)
                     if verbose:
                         print('Algorithm playing!')
                         # print(pred)
