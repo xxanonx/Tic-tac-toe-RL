@@ -9,7 +9,7 @@ import tflite_runtime.interpreter as tflite
 import random, time
 from gpiozero import LED, Button
 import matplotlib.pyplot as plt
-import socket
+import socket, os
 
 go_led = LED(23)
 # pixel = neopixel.NeoPixel(board.D18, 9, pixel_order=neopixel.GRB)
@@ -27,11 +27,8 @@ TERMINAL_INPUT = False
 '''X_COLOR = (255,0,0)
 O_COLOR = (0,0,255)'''
 
-host = socket.gethostname()  # get local machine name
-port = 8080  # Make sure it's within the > 1024 $$ <65535 range
-
-s = socket.socket()
-s.connect((host, port))
+s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+s.connect("/tmp/socket_test.s")
 
 
 def map_range(x, from_low=-1, from_high=1, to_low=0, to_high=255):
