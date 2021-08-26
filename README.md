@@ -22,8 +22,11 @@ So how did I get the Tic Tac Toe going?
 	1. Made a passable version of Tic Tac Toe with ways to win (3 in a row in any direction, tougher than you might think).
 	2. Put in a random number generator that randomly plays Tic Tac Toe.
 	3. Put in a value system that values the board based on "your" pieces, opponents pieces, and whose turn it is.
-	4. Put the random number generator against itself, recorded board history and board values. Then used that data to train a Critic which doesn't work right now :(
-	5. Kept the random player playing itself, recorded history and moves from winning games. Used that data to train Actor, which plays like a child but can win if you let it.
+	4. Put the random number generator against itself, recorded board history and board values. Then used that data to train a Critic.
+	5. Kept the random player playing itself (but introduce random play), recorded history and moves from winning games. Used that data to train Actor, which plays like a child but can win if you let it. I eventually only let games be recorded if the winning move had a score of 0.5, that way it would try to win sooner.
+	6. Train the Actor to play both as X's or O's without changing the board. 
+	7. Convert models to TFLite
+	8. Set up to work on Raspberry pi
 <br/>
 
 Comparing Random play to basic play:
@@ -41,3 +44,5 @@ See with random play, it plays randomly. Sometimes it may look like it's getting
 In the previous three photos my opponent was the "childish" algorithm, it already has a strategy. Whenever it goes first, it takes the middle (makes sense, best chance of winning from the middle). With the limited testing I've had so far, it likes to go for a horizontal win and in both cases documented my first move was on the right or left of the middle square. I thought it was odd that the algorithm's next move was to complete the middle row, pretty much a wasted move. Maybe in the training data it randomly won a lot in the middle row but as soon as it plays against an opponent with more than one braincell, it had been thwarted!
 
 Now in the first of the photos documenting the algorithm's play, after I realized it was retarded, I went for the win in the bottom right corner to show it who's boss. I didn't think much of it. I thought more of it when I ended up in a mirrored situation later on and I thought it was odd it kept playing the middle row in the early game instead of going literally anywhere else! So I wanted to see what happend when I block it by moving to the top right corner. I was pleasantly surprised when the algorithm went for the diagonal win. Now if this was the random player, it would have a 33% chance of winning the next move and that's not too bad! Remember this algorithm was trained on data from winning random plays not world champion tic tac toe players so it's understandable why the algorithm sucks. 
+
+Now it plays a little better :) Hopefully playing against humans will get better data.
