@@ -8,7 +8,7 @@ import tflite_runtime.interpreter as tflite
 # from tensorflow import lite as tflite
 import random, time
 from gpiozero import LED, Button
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 
 go_led = LED(23)
 pixel = neopixel.NeoPixel(board.D18, 9, pixel_order=neopixel.GRB)
@@ -22,7 +22,7 @@ _b_yo = Button(22)
 x_buttons = [_b_xno, _b_xz,_b_xo]
 y_buttons = [_b_yno, _b_yz, _b_yo]
 
-TERMINAL_INPUT = True
+TERMINAL_INPUT = False
 X_COLOR = (255,0,0)
 O_COLOR = (0,0,255)
 
@@ -30,6 +30,54 @@ O_COLOR = (0,0,255)
 def map_range(x, from_low=-1, from_high=1, to_low=0, to_high=255):
     y = to_low + ((to_high - to_low) / (from_high - from_low)) * (x - from_low) 
     return y
+
+
+def visualize_board(boardy, game_done, human=True):
+    vis_board = np.copy(boardy).ravel()
+    repeat = 1
+    '''if game_done:
+        repeat = 6
+    for r in range(repeat):
+        if game_done and repeat % 2 == 0:
+            pixel.fill((0,0,0))
+            time.sleep(1)
+        
+        else:
+            for box in range(vis_board.size):
+                pix = box
+                if box == 3:
+                    pix = 5
+                elif box == 5:
+                    pix = 3
+                
+                elif vis_board[box] == -1:
+                    pixel[pix] = X_COLOR
+                elif vis_board[box] == 1:
+                    pixel[pix] = O_COLOR
+                else:
+                    pixel[pix] = (0,0,0)'''
+                    
+    # pixel.show()
+    if not game_done:
+        x_in = False
+        y_in = False
+        while True:
+            if not x_in:
+                xnum = -1
+                for xbut in x_buttons:
+                    if xbut.is_pressed:
+                        x_in = True
+                        break
+                    xnum += 1
+            if not y_in:
+                ynum = -1
+                for ybut in y_buttons:
+                    if ybut.is_pressed:
+                        y_in = True
+                        break
+                    ynum += 1
+            if y_in and x_in:
+                return f"{xnum},{ynum}"
 
 
 def model_predict(model_int, input_array, verbose=False):
@@ -91,8 +139,8 @@ def model_predict(model_int, input_array, verbose=False):
                 model_vis2.append(mapped_layer)
         model_vis3 = np.array(model_vis2)
         # print(model_vis3)
-        plt.imshow(model_vis3)
-        plt.show()
+        # plt.imshow(model_vis3)
+        # plt.show()
 
     return output
     
@@ -406,56 +454,11 @@ class BoardEnv:
         else:
             return False
     
-    def visualize_board(boardy, game_done, human=True):
-        vis_board = np.copy(boardy).ravel()
-        repeat = 1
-        if game_done:
-            repeat = 6
-        for r in range(repeat):
-            if game_done and repeat % 2 == 0:
-                pixel.fill((0,0,0))
-                time.sleep(1)
-            
-            else:
-                for box in range(vis_board.size):
-                    pix = box
-                    if box == 3:
-                        pix = 5
-                    elif box == 5:
-                        pix = 3
-                    
-                    elif vis_board[box] == -1:
-                        pixel[pix] = X_COLOR
-                    elif vis_board[box] == 1:
-                        pixel[pix] = O_COLOR
-                    else:
-                        pixel[pix] = (0,0,0)
-                        
-        pixel.show()
-        if not game_done:
-            x_in = False
-            y_in = False
-            while True:
-                if not x_in:
-                    xnum = -1
-                    for xbut in x_buttons:
-                        if xbut.is_pressed:
-                            x_in = True
-                            break
-                        xnum += 1
-                if not y_in:
-                    ynum = -1
-                    for ybut in y_buttons:
-                        if ybut.is_pressed:
-                            y_in = True
-                            break
-                        ynum += 1
-                if y_in and x_in:
-                    return f"{xnum},{yum}"
 
     def get_state(self, human=False, random_play=False, verbose=False):
         # Whose turn matters and human matters
         if human:
+            go_led.on()
             if self.whose_turn:
                 piece = "X"
                 # op_piece = "O"
@@ -501,6 +504,8 @@ class BoardEnv:
                     if (move1[0] != move2[0]) and (move1[1] != move2[1]):
                         if self.make_move(move1[0], move1[1]):
                            # print(f"{move} is acceptable")
+                            go_led.off()
+                            time.sleep(1)
                             break
 
                 print(f"{move} IS INVALID")
