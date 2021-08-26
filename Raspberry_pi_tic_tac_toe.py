@@ -8,10 +8,11 @@ import tflite_runtime.interpreter as tflite
 # from tensorflow import lite as tflite
 import random, time
 from gpiozero import LED, Button
-# import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
+import socket
 
 go_led = LED(23)
-pixel = neopixel.NeoPixel(board.D18, 9, pixel_order=neopixel.GRB)
+# pixel = neopixel.NeoPixel(board.D18, 9, pixel_order=neopixel.GRB)
 _b_xno = Button(2)
 _b_xz = Button(3)
 _b_xo = Button(4)
@@ -23,8 +24,14 @@ x_buttons = [_b_xno, _b_xz,_b_xo]
 y_buttons = [_b_yno, _b_yz, _b_yo]
 
 TERMINAL_INPUT = False
-X_COLOR = (255,0,0)
-O_COLOR = (0,0,255)
+'''X_COLOR = (255,0,0)
+O_COLOR = (0,0,255)'''
+
+host = socket.gethostname()  # get local machine name
+port = 8080  # Make sure it's within the > 1024 $$ <65535 range
+
+s = socket.socket()
+s.connect((host, port))
 
 
 def map_range(x, from_low=-1, from_high=1, to_low=0, to_high=255):
@@ -34,7 +41,11 @@ def map_range(x, from_low=-1, from_high=1, to_low=0, to_high=255):
 
 def visualize_board(boardy, game_done, human=True):
     vis_board = np.copy(boardy).ravel()
-    repeat = 1
+    # repeat = 1
+    s.send(vis_board)
+    data = s.recv(1024).decode('utf-8')
+    print('Received from server: ' + data)
+    s.close()
     '''if game_done:
         repeat = 6
     for r in range(repeat):
@@ -138,9 +149,9 @@ def model_predict(model_int, input_array, verbose=False):
             else:
                 model_vis2.append(mapped_layer)
         model_vis3 = np.array(model_vis2)
-        # print(model_vis3)
-        # plt.imshow(model_vis3)
-        # plt.show()
+        print(model_vis3)
+        plt.imshow(model_vis3)
+        plt.show()
 
     return output
     
