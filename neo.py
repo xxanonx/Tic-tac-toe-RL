@@ -7,6 +7,13 @@ pixel = neopixel.NeoPixel(board.D18, 9, pixel_order=neopixel.GRB)
 X_COLOR = (255,0,0)
 O_COLOR = (0,0,255)
 
+pixel.clear()
+for i in range(9):
+    pixel[i] = (255,0,255)
+    pixel.show()
+    time.sleep(1)
+pixel.clear()
+
 host = socket.gethostname()  # get local machine name
 port = 8080  # Make sure it's within the > 1024 $$ <65535 range
 
