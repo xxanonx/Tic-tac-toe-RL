@@ -9,7 +9,7 @@ import tflite_runtime.interpreter as tflite
 import random, time
 from gpiozero import LED, Button
 import matplotlib.pyplot as plt
-import socket, os
+import socket, pickle
 
 go_led = LED(23)
 # pixel = neopixel.NeoPixel(board.D18, 9, pixel_order=neopixel.GRB)
@@ -23,13 +23,17 @@ _b_yo = Button(22)
 x_buttons = [_b_xno, _b_xz,_b_xo]
 y_buttons = [_b_yno, _b_yz, _b_yo]
 
-TERMINAL_INPUT = False
+TERMINAL_INPUT = True
 '''X_COLOR = (255,0,0)
 O_COLOR = (0,0,255)'''
 
-s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-s.connect("/tmp/socket_test.s")
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+s.bind((socket.gethostname(), 1234))
+s.listen(5)
 
+time.sleep(5)
+clientsocket, address = s.accept()
+print(f"Connection from {address} has been established.")
 
 def map_range(x, from_low=-1, from_high=1, to_low=0, to_high=255):
     y = to_low + ((to_high - to_low) / (from_high - from_low)) * (x - from_low) 
@@ -39,10 +43,9 @@ def map_range(x, from_low=-1, from_high=1, to_low=0, to_high=255):
 def visualize_board(boardy, game_done, human=True):
     vis_board = np.copy(boardy).ravel()
     # repeat = 1
-    s.send(vis_board)
-    data = s.recv(1024).decode('utf-8')
-    print('Received from server: ' + data)
-    s.close()
+    print('sending board to neo.py')
+    clientsocket.send(pickle.dumps(vis_board.tolist()))
+    
     '''if game_done:
         repeat = 6
     for r in range(repeat):
@@ -66,6 +69,7 @@ def visualize_board(boardy, game_done, human=True):
                     pixel[pix] = (0,0,0)'''
                     
     # pixel.show()
+    '''
     if not game_done:
         x_in = False
         y_in = False
@@ -85,7 +89,7 @@ def visualize_board(boardy, game_done, human=True):
                         break
                     ynum += 1
             if y_in and x_in:
-                return f"{xnum},{ynum}"
+                return f"{xnum},{ynum}"'''
 
 
 def model_predict(model_int, input_array, verbose=False):
@@ -487,6 +491,7 @@ class BoardEnv:
                 print(line)
             while True:
                 if TERMINAL_INPUT:
+                    visualize_board(self.board, False, human)
                     move = input("what is your move? ")
                 else:
                     move = visualize_board(self.board, False, human)
