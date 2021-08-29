@@ -23,7 +23,7 @@ So how did I get the Tic Tac Toe going?
 	2. Put in a random number generator that randomly plays Tic Tac Toe.
 	3. Put in a value system that values the board based on "your" pieces, opponents pieces, and whose turn it is.
 	4. Put the random number generator against itself, recorded board history and board values. Then used that data to train a Critic.
-	5. Kept the random player playing itself (but introduce random play), recorded history and moves from winning games. Used that data to train Actor, which plays like a child but can win if you let it. I eventually only let games be recorded if the winning move had a score of 0.5, that way it would try to win sooner.
+	5. Had the model player playing a random player, then had it play itself (but introduced random play), recorded history and moves from winning games. Used that data to train Actor, which plays like a child but can win if you let it. I eventually only let games be recorded if the winning move had a score of 0.5 or more, that way it would try to win sooner.
 	6. Train the Actor to play both as X's or O's without changing the board. 
 	7. Convert models to TFLite
 	8. Set up to work on Raspberry pi
