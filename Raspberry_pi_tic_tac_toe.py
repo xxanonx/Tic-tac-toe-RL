@@ -606,7 +606,7 @@ class BoardEnv:
                 self.p1.opponent_score += 1
             
             random.seed(time.time_ns())
-            if human and (winner_ == -1 or winner_ == 1 or (winner_ == 0 and (random.randint(0,10) == 5)) and value_board > 0.5:
+            if human and (winner_ == -1 or winner_ == 1 or (winner_ == 0 and (random.randint(0,10) == 5))) and value_board > 0.5:
                 if winner_ == -1 or self.whose_turn == 0:
                     self.actor_training.extend(self.round_buffer_O)
                     self.actor_moves.extend(self.move_buffer_O)
