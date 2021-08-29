@@ -27,6 +27,8 @@ So how did I get the Tic Tac Toe going?
 	6. Train the Actor to play both as X's or O's without changing the board. 
 	7. Convert models to TFLite
 	8. Set up to work on Raspberry pi
+	9. Set up neopixels. Had to create another python script and use sockets to communicate between the two.
+	10. Working game playing against the computer with buttons and lights, set up so every human win and some draws are saved as expert moves for future training
 <br/>
 
 Comparing Random play to basic play:
