@@ -12,7 +12,6 @@ import matplotlib.pyplot as plt
 import socket, pickle
 
 go_led = LED(23)
-# pixel = neopixel.NeoPixel(board.D18, 9, pixel_order=neopixel.GRB)
 _b_xno = Button(2)
 _b_xz = Button(3)
 _b_xo = Button(4)
@@ -23,15 +22,12 @@ _b_yo = Button(22)
 x_buttons = [_b_xno, _b_xz,_b_xo]
 y_buttons = [_b_yno, _b_yz, _b_yo]
 
-TERMINAL_INPUT = True
-'''X_COLOR = (255,0,0)
-O_COLOR = (0,0,255)'''
+TERMINAL_INPUT = False
 
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 s.bind((socket.gethostname(), 1234))
 s.listen(5)
 
-time.sleep(5)
 clientsocket, address = s.accept()
 print(f"Connection from {address} has been established.")
 
@@ -40,37 +36,13 @@ def map_range(x, from_low=-1, from_high=1, to_low=0, to_high=255):
     return y
 
 
-def visualize_board(boardy, game_done, human=True):
+def visualize_board(boardy, just_show=False):
     vis_board = np.copy(boardy).ravel()
     # repeat = 1
     print('sending board to neo.py')
     clientsocket.send(pickle.dumps(vis_board.tolist()))
-    
-    '''if game_done:
-        repeat = 6
-    for r in range(repeat):
-        if game_done and repeat % 2 == 0:
-            pixel.fill((0,0,0))
-            time.sleep(1)
-        
-        else:
-            for box in range(vis_board.size):
-                pix = box
-                if box == 3:
-                    pix = 5
-                elif box == 5:
-                    pix = 3
-                
-                elif vis_board[box] == -1:
-                    pixel[pix] = X_COLOR
-                elif vis_board[box] == 1:
-                    pixel[pix] = O_COLOR
-                else:
-                    pixel[pix] = (0,0,0)'''
-                    
-    # pixel.show()
-    '''
-    if not game_done:
+       
+    if not just_show:
         x_in = False
         y_in = False
         while True:
@@ -89,7 +61,7 @@ def visualize_board(boardy, game_done, human=True):
                         break
                     ynum += 1
             if y_in and x_in:
-                return f"{xnum},{ynum}"'''
+                return f"{xnum},{ynum}"
 
 
 def model_predict(model_int, input_array, verbose=False):
@@ -491,10 +463,10 @@ class BoardEnv:
                 print(line)
             while True:
                 if TERMINAL_INPUT:
-                    visualize_board(self.board, False, human)
+                    # visualize_board(self.board, False, human)
                     move = input("what is your move? ")
                 else:
-                    move = visualize_board(self.board, False, human)
+                    move = visualize_board(self.board, False)
                 move1 = move.split(",")
                 move2 = move.split(",")
                 if ("," in move) and (5 >= len(move) >= 3) and ((move1[0].isdigit() or move1[0] == "-1") and (move1[1].isdigit() or move1[1] == "-1")):
@@ -620,6 +592,8 @@ class BoardEnv:
                     if self.make_move(move1[0], move1[1]):
                         if not random_play and ai_can_skip and verbose:
                             print(f"{move} is acceptable")
+                            visualize_board(self.board, True)
+                            time.sleep(1)
                         break
 
         done, winner_ = self.look_for_win()
@@ -640,6 +614,22 @@ class BoardEnv:
             self.move_buffer_O.clear()
             self.round_buffer_X.clear()
             self.move_buffer_X.clear()
+            
+            visualize_board(self.board, True)
+            time.sleep(3)
+            for re in range(3):
+                if winner_ == -1:
+                    visualize_board(np.array([[-1,-1,-1],
+                                              [-1,0,-1],
+                                              [-1,-1,-1]]), True)
+                elif winner_ == 1:
+                    visualize_board(np.array([[1,0,1],
+                                              [0,1,0],
+                                              [1,0,1]]), True)
+                time.sleep(0.5)
+                visualize_board(self.empty_board, True)
+                time.sleep(0.5)
+            
             if verbose:
                 print(self.board)
                 if winner_ == -1:

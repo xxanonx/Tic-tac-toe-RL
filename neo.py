@@ -9,12 +9,12 @@ s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 s.connect((socket.gethostname(), 1234))
 
 pixel = neopixel.NeoPixel(board.D18, 9)
-X_COLOR = (255,0,0)
-O_COLOR = (0,0,255)
+X_COLOR = (50,0,0)
+O_COLOR = (0,0,50)
 
 pixel.fill((0,0,0))
 for i in range(9):
-    pixel[i] = (255,0,255)
+    pixel[i] = (50,0,50)
     pixel.show()
     time.sleep(1)
 pixel.fill((0,0,0))
@@ -22,8 +22,8 @@ pixel.fill((0,0,0))
 while True:
     msg = s.recv(1024)
     if len(msg) > 0:
-        print(msg)
-        print(len(msg))
+        # print(msg)
+        # print(len(msg))
         board = pickle.loads(msg)
         print(board)
     
@@ -34,7 +34,7 @@ while True:
             elif box == 5:
                 pix = 3
 
-            elif board[box] == -1:
+            if board[box] == -1:
                 pixel[pix] = X_COLOR
             elif board[box] == 1:
                 pixel[pix] = O_COLOR
