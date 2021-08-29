@@ -1,14 +1,14 @@
 # RL-practice
-Making NN play games before I go for my main goal of a stock trading bot
+Making Neural Networks play games before I go for my main goal of a stock trading bot
 
 Goals:
 	
-	[]Tic Tac Toe
-	[]Tic Tac Toe (3D)
-	[]Connect 4
-	[]Connect 4x4
-	[](side project not RL: what to wear today, takes weather data in the area and tells you what clothes to bring)
-	[](side project not RL: learn faces of people at my work)
+- [x] Tic Tac Toe
+- [ ] Tic Tac Toe (3D)
+- [ ] Connect 4
+- [ ] Connect 4x4
+- [ ] (side project not RL: what to wear today, takes weather data in the area and tells you what clothes to bring)
+- [ ] (side project not RL: learn faces of people at my work)
 	
 Optional:
 
