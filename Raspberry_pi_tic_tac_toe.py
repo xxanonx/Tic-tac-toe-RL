@@ -170,7 +170,7 @@ class BoardEnv:
         self.game_over = False
         self.whose_turn = True
         # -1 = O and 1 = X
-        # false = 0 and true = X
+        # false = O and true = X
         self.empty_board = np.array([
             [0, 0, 0],
             [0, 0, 0],
@@ -604,12 +604,22 @@ class BoardEnv:
                 self.p1.score += 1
             else:
                 self.p1.opponent_score += 1
-            if winner_ == -1 and value_board > 0.5:
+            
+            random.seed(time.time_ns())
+            if human and (winner_ == -1 or winner_ == 1 or (winner_ == 0 and (random.randint(0,10) == 5)) and value_board > 0.5:
+                if winner_ == -1 or self.whose_turn == 0:
                     self.actor_training.extend(self.round_buffer_O)
                     self.actor_moves.extend(self.move_buffer_O)
-            elif winner_ == 1 and value_board > 0.5:
-                self.actor_training.extend(self.round_buffer_X)
-                self.actor_moves.extend(self.move_buffer_X)
+                elif winner_ == 1 or self.whose_turn == 1:
+                    self.actor_training.extend(self.round_buffer_X)
+                    self.actor_moves.extend(self.move_buffer_X)                
+
+                with open('expert_training.pickle', 'wb') as wr:
+                    pickle.dump(self.actor_training, wr)
+                with open('expert_moves.pickle', 'wb') as wr:
+                    pickle.dump(self.actor_moves, wr)                        
+
+                
             self.round_buffer_O.clear()
             self.move_buffer_O.clear()
             self.round_buffer_X.clear()
