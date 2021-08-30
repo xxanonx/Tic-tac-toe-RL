@@ -31,6 +31,7 @@ s.listen(5)
 clientsocket, address = s.accept()
 print(f"Connection from {address} has been established.")
 
+
 def map_range(x, from_low=-1, from_high=1, to_low=0, to_high=255):
     y = to_low + ((to_high - to_low) / (from_high - from_low)) * (x - from_low) 
     return y
@@ -152,8 +153,11 @@ class BoardEnv:
         self.move_buffer_O = []
         self.round_buffer_X = []
         self.move_buffer_X = []
-        self.actor_training = []
-        self.actor_moves = []
+
+        with open('expert_training.pickle', 'rb') as re:
+            self.actor_training = pickle.load(re)
+        with open('expert_moves.pickle', 'rb') as re:
+            self.actor_moves = pickle.load(re)
         # For critic
         self.recorded_games = []
         self.recorded_scores = []
@@ -437,7 +441,6 @@ class BoardEnv:
             return True
         else:
             return False
-    
 
     def get_state(self, human=False, random_play=False, verbose=False):
         # Whose turn matters and human matters
