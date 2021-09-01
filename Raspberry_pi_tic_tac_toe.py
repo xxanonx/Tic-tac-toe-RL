@@ -21,6 +21,8 @@ _b_yo = Button(22)
 
 x_buttons = [_b_xno, _b_xz,_b_xo]
 y_buttons = [_b_yno, _b_yz, _b_yo]
+time_since_human = time.time()
+self_play = False
 
 TERMINAL_INPUT = False
 
@@ -38,8 +40,9 @@ def map_range(x, from_low=-1, from_high=1, to_low=0, to_high=255):
 
 
 def visualize_board(boardy, just_show=False):
+    global time_since_human
+    global self_play
     vis_board = np.copy(boardy).ravel()
-    # repeat = 1
     print('sending board to neo.py')
     clientsocket.send(pickle.dumps(vis_board.tolist()))
        
@@ -62,7 +65,11 @@ def visualize_board(boardy, just_show=False):
                         break
                     ynum += 1
             if y_in and x_in:
+                time_since_human = time.time()
                 return f"{xnum},{ynum}"
+            elif time.time() - time_since_human >= 300:
+                self_play = True
+                break
 
 
 def model_predict(model_int, input_array, verbose=False):
@@ -470,6 +477,8 @@ class BoardEnv:
                     move = input("what is your move? ")
                 else:
                     move = visualize_board(self.board, False)
+                    if self_play:
+                        break
                 move1 = move.split(",")
                 move2 = move.split(",")
                 if ("," in move) and (5 >= len(move) >= 3) and ((move1[0].isdigit() or move1[0] == "-1") and (move1[1].isdigit() or move1[1] == "-1")):
@@ -609,7 +618,7 @@ class BoardEnv:
                 self.p1.opponent_score += 1
             
             random.seed(time.time_ns())
-            if human and (winner_ == -1 or winner_ == 1 or (winner_ == 0 and (random.randint(0,10) == 5))) and value_board > 0.5:
+            if not self_play and ((human and (winner_ == -1 or winner_ == 1) and value_board > 0.5) or (winner_ == 0 and (random.randint(0,5) == 1))):
                 if winner_ == -1 or self.whose_turn == 0:
                     self.actor_training.extend(self.round_buffer_O)
                     self.actor_moves.extend(self.move_buffer_O)
@@ -665,6 +674,7 @@ human_O = False
 one_shot = False
 one_shot_1000 = False
 start_time = time.perf_counter()
+time_since_human = time.time()
 
 while True:
     if b1.games_played % 5 == 0:
@@ -674,9 +684,27 @@ while True:
     else:
         one_shot = False
 
-    if human_O:
-        b1.get_state(human=not b1.whose_turn, random_play=False, verbose=True)
+    if self_play:
+        random.seed(time.time_ns())    
+        if human_O:
+            b1.get_state(human=False, random_play=(not b1.whose_turn and (random.randint(0,2) == 0)), verbose=True)
 
+        else:
+            b1.get_state(human=False, random_play=(b1.whose_turn and (random.randint(0,2) == 0)), verbose=True)
+        
+        for xbut in x_buttons:
+            if xbut.is_pressed:
+                self_play = False
+                time_since_human = time.time()
+        for ybut in y_buttons:
+            if ybut.is_pressed:
+                self_play = False
+                time_since_human = time.time()
+            
     else:
-        b1.get_state(human=b1.whose_turn, random_play=False, verbose=True)
+        if human_O:
+            b1.get_state(human=not b1.whose_turn, random_play=False, verbose=True)
+
+        else:
+            b1.get_state(human=b1.whose_turn, random_play=False, verbose=True)
 
