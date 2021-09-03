@@ -594,9 +594,9 @@ b1.p1.load_models()
 one_shot_1000 = False
 start_time = time.perf_counter()
 
-step = 0
+step = 4
 while True:
-    if (5 > b1.games_played % 300000 > 0 and len(b1.recorded_games) > 600000) or step > 4:
+    if (5 > b1.games_played % 300000 > 0 and len(b1.recorded_games) > 500000) or step > 4:
         if learning:
             b1.p1.teach_critc(b1.recorded_games, b1.recorded_scores)
             if step > 0:
