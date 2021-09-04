@@ -92,7 +92,7 @@ class Player:
         print(train_x)
         print(train_y)
 
-        self.Actor_model.fit(train_x, train_y, validation_data=(validation_x, validation_y), epochs=10)
+        self.Actor_model.fit(train_x, train_y, validation_data=(validation_x, validation_y), epochs=20)
         self.Actor_model.save('/mnt/96a66be0-609e-43bd-a076-253e3c725b17/Python/RL testing/save_models/TTT2D_actor')
 
     def load_models(self):
@@ -553,12 +553,16 @@ class BoardEnv:
                 self.p1.score += 1
             else:
                 self.p1.opponent_score += 1
-            if winner_ == -1 and value_board > 0.5:
-                    self.actor_training.extend(self.round_buffer_O)
-                    self.actor_moves.extend(self.move_buffer_O)
-            elif winner_ == 1 and value_board > 0.5:
+            if winner_ == -1 and value_board > 0.7:
+                self.actor_training.extend(self.round_buffer_O)
+                self.actor_moves.extend(self.move_buffer_O)
+                self.actor_training.append(self.round_buffer_X[-1])
+                self.actor_moves.append(self.move_buffer_O[-1])
+            elif winner_ == 1 and value_board > 0.7:
                 self.actor_training.extend(self.round_buffer_X)
                 self.actor_moves.extend(self.move_buffer_X)
+                self.actor_training.append(self.round_buffer_O[-1])
+                self.actor_moves.append(self.move_buffer_X[-1])
             self.round_buffer_O.clear()
             self.move_buffer_O.clear()
             self.round_buffer_X.clear()
@@ -590,9 +594,9 @@ b1.p1.load_models()
 one_shot_1000 = False
 start_time = time.perf_counter()
 
-step = 3
+step = 4
 while True:
-    if 5> b1.games_played % 50000 > 0 and b1.games_played > 100 or step > 9:
+    if (5 > b1.games_played % 300000 > 0 and len(b1.recorded_games) > 500000) or step > 4:
         if learning:
             b1.p1.teach_critc(b1.recorded_games, b1.recorded_scores)
             if step > 0:
@@ -609,7 +613,7 @@ while True:
                 one_shot = True
             else:
                 one_shot = False'''
-        if step > 8:
+        if step > 3:
             if step % 2 == 0:
                 b1.get_state(human=not b1.whose_turn, random_play=False, verbose=True)
             else:
@@ -633,21 +637,22 @@ while True:
             one_shot = False
 
         # steps of progressive learning
-        if step <= 1:
+        if step <= 2:
             b1.get_state(human=False, random_play=True, verbose=False)
 
-        elif step <= 8:
+        elif step <= 6:
             random.seed(time.time_ns())
             if human_O:
-                b1.get_state(human=False, random_play=(b1.whose_turn or (not b1.whose_turn and (random.randint(0, step) == 0))), verbose=False)
+                b1.get_state(human=False, random_play=(b1.whose_turn or (not b1.whose_turn and (random.randint(0, int(step/2)) == 0))), verbose=False)
             else:
-                b1.get_state(human=False, random_play=(not b1.whose_turn or (b1.whose_turn and (random.randint(0, step) == 0))), verbose=False)
+                b1.get_state(human=False, random_play=(not b1.whose_turn or (b1.whose_turn and (random.randint(0, int(step/2)) == 0))), verbose=False)
 
-        elif step > 8:
+        elif step > 6:
+            random.seed(time.time_ns())
             if human_O:
-                b1.get_state(human=False, random_play=(random.randint(0, int(step/2)) == 0), verbose=False)
+                b1.get_state(human=False, random_play=(random.randint(0, int(step/4)) == 0), verbose=False)
             else:
-                b1.get_state(human=False, random_play=(random.randint(0, int(step/2)) == 0), verbose=False)
+                b1.get_state(human=False, random_play=(random.randint(0, int(step/4)) == 0), verbose=False)
             # time.sleep(1)
 
         if b1.games_played % 1000 == 0 and not one_shot_1000:
