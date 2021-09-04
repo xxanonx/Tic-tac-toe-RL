@@ -142,8 +142,8 @@ class Player:
         self.sign = sign
         self.score = 0
         self.opponent_score = 0
-        tflite_critic_model = 'save_models/citic_model.tflite'
-        tflite_actor_model = 'save_models/actor_model.tflite'
+        tflite_critic_model = 'save_models/citic_modelM.tflite'
+        tflite_actor_model = 'save_models/actor_modelM.tflite'
         # Load the TFLite model in TFLite Interpreter
         self.critic_interpreter = tflite.Interpreter(tflite_critic_model)
         self.actor_interpreter = tflite.Interpreter(tflite_actor_model)
@@ -622,9 +622,16 @@ class BoardEnv:
                 if winner_ == -1 or self.whose_turn == 0:
                     self.actor_training.extend(self.round_buffer_O)
                     self.actor_moves.extend(self.move_buffer_O)
+                    if winner_ == -1:
+                        self.actor_training.append(self.round_buffer_X[-1])
+                        self.actor_moves.append(self.move_buffer_O[-1])
+                    
                 elif winner_ == 1 or self.whose_turn == 1:
                     self.actor_training.extend(self.round_buffer_X)
-                    self.actor_moves.extend(self.move_buffer_X)                
+                    self.actor_moves.extend(self.move_buffer_X)
+                    if winner_ == 1:
+                        self.actor_training.append(self.round_buffer_O[-1])
+                        self.actor_moves.append(self.move_buffer_X[-1])
 
                 with open('expert_training.pickle', 'wb') as wr:
                     pickle.dump(self.actor_training, wr)
@@ -687,10 +694,10 @@ while True:
     if self_play:
         random.seed(time.time_ns())    
         if human_O:
-            b1.get_state(human=False, random_play=(not b1.whose_turn and (random.randint(0,2) == 0)), verbose=True)
+            b1.get_state(human=False, random_play=(not b1.whose_turn and (random.randint(0,1) == 0)), verbose=True)
 
         else:
-            b1.get_state(human=False, random_play=(b1.whose_turn and (random.randint(0,2) == 0)), verbose=True)
+            b1.get_state(human=False, random_play=(b1.whose_turn and (random.randint(0,1) == 0)), verbose=True)
         
         for xbut in x_buttons:
             if xbut.is_pressed:
