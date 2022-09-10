@@ -1,5 +1,0 @@
-#!/bin/bash
-echo "these processes are taking up Socket 1234:"
-echo $(sudo lsof -t -i:1234)
-sudo kill $(sudo lsof -t -i:1234)
-
