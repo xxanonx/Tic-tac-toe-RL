@@ -1,0 +1,4 @@
+#!/bin/bash
+python3 /home/pi/Desktop/Python/RL-practice/2D_tic_tac_toe/Raspberry_pi_tic_tac_toe.py &
+sleep 3 &&
+sudo python3 /home/pi/Desktop/Python/RL-practice/2D_tic_tac_toe/neo.py &
