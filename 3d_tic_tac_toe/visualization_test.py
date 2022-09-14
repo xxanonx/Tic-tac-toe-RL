@@ -5,7 +5,9 @@ import matplotlib.pyplot as plt
 def visualize(board):
     fig = plt.figure()
     ax = fig.add_subplot(projection='3d')
-    for color, add in [('b', -1), ('r', 1), ('0.8', 0)]:
+    for color, add in [('b', -1),
+                       ('r', 1),
+                       ('0.8', 0)]:
         x = []
         y = []
         z = []
@@ -31,26 +33,30 @@ def visualize(board):
     plt.show()
 
 
-# array3d = np.zeros((3, 3, 3))
-# array2d = np.ones((3, 3))
-
-# array3d[0] = np.copy(array2d)
-# array3d[1] = np.copy(array2d * -1)
-array3d = np.array(
+array3d = np.arange(27)
+array3d = array3d.reshape((3, 3, 3))
+array2d = np.ones((3, 3))
+'''array3d[0] = np.copy(array2d)
+array3d[1] = np.copy(array2d * -1)'''
+'''array3d = np.array(
         [[[-1, -1, -1],
         [-1, 1, 1],
-        [1, 0, 0]],
+        [1, 0, -1]],
+
        [[-1, 0, -1],
         [1, -1, 1],
-        [0, 0, 0]],
+        [0, 0, 1]],
+
        [[1, 0, -1],
         [0, 0, -1],
-        [0, 0, 0]]])
-print(array3d)
+        [0, 0, -1]]])'''
 
-visualize(array3d)
+print(array3d)
+print(array3d.diagonal())
+print(np.fliplr(array3d).diagonal())
+'''visualize(array3d)
 visualize(np.moveaxis(array3d, 0, -1))
-visualize(np.moveaxis(array3d, -1, 0))
+visualize(np.moveaxis(array3d, -1, 0))'''
 
 
 

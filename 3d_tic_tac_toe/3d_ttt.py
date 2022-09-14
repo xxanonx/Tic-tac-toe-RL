@@ -16,6 +16,7 @@ EMPTY_BOARD = np.zeros((3, 3, 3), dtype='int8')
 ONES = np.ones((3, 3, 3))
 NEG_ONES = (np.ones((3, 3, 3)) * -1)
 
+
 class BoardEnv:
     def __init__(self):
         self.games_played = -1
@@ -29,7 +30,6 @@ class BoardEnv:
         # false = 0 and true = X
 
         self.reset()
-
 
     def reset(self):
         """[[[0. 0. 0.]
@@ -59,37 +59,47 @@ class BoardEnv:
         # got to look at it from bottom to top, side to side, and other side to side
 
         # checking layers
-        for layer in self.board:
-            if layer.any():
-                self.game_over, winner = check_layer_for_win(layer)
+        for orientation in [self.board,
+                      np.moveaxis(self.board, 0, -1),
+                      np.moveaxis(self.board, -1, 0)]:
+            for layer in orientation:
+                if self.game_over:
+                    break
+                if layer.any():
+                    self.game_over, winner = check_layer_for_win(layer)
+        if not self.game_over:
+            # special diagonals
+            for diag in [self.board.diagonal(), np.fliplr(self.board).diagonal()]:
+                if not self.game_over:
+                    if diag.any():
+                        self.game_over, winner = check_layer_for_win(layer)
 
         if board_filled and not self.game_over:
             self.game_over = True
-            return True, 0
-        else:
-            return False, 0
+            winner = 0
+        return self.game_over, winner
 
     def make_move(self, x, y, just_data=False):
-        if self.board[y][x] == 0:
-            # for X's
-            # for critic
-            self.current_board = np.copy(self.board)
+        move_made = False
+        self.current_board = np.copy(self.board)
+        for layer in self.board:
+            if move_made:
+                break
+            if layer[y][x] == 0:
 
-            # for actor
-            if not just_data:
-                move2 = np.copy(self.empty_board)
-                move2[y][x] = 1
+                if not just_data:
+                    move2 = np.copy(EMPTY_BOARD)
+                    move2[y][x] = 1
 
-
-            # back to reality
-            if not just_data:
-                if self.whose_turn:
-                    self.board[y][x] = 1
-                    self.previous_board_X = np.copy(self.board)
-                else:
-                    self.board[y][x] = -1
-                    self.previous_board_O = np.copy(self.board)
-            return True
+                # back to reality
+                if not just_data:
+                    if self.whose_turn:
+                        self.board[y][x] = 1
+                        self.previous_board_X = np.copy(self.board)
+                    else:
+                        self.board[y][x] = -1
+                        self.previous_board_O = np.copy(self.board)
+                return True
         else:
             return False
 
@@ -281,78 +291,43 @@ class BoardEnv:
 def check_layer_for_win(layer):
     game_over = False
     winner = 0
-    for row in layer:
-        in_a_row = 0
-        # print(row)
-        if row.all():
-            # if line doesn't have zeros
-            for valr in row:
-                # double check that all values are the same
-                if int(valr) != int(row[0]):
-                    break
-                else:
-                    in_a_row += 1
-
-            if in_a_row == 3:
-                # player row[0] won
-                game_over = True
-                winner = row[0]
-                break
-
-    # Checking vertical
-    # print("Checking vertical")
-    if not game_over:
-        for col in layer.transpose():
-            in_a_row = 0
-            if col.all():
-                # if line doesn't have zeros
-                for valc in col:
-                    # double check that all values are the same
-                    if int(valc) != int(col[0]):
+    # Checking horizontal and vertical
+    for board in [layer, layer.transpose()]:
+        for row in board:
+            if not game_over:
+                in_a_row = 0
+                # print(row)
+                if row.all():
+                    # if line doesn't have zeros
+                    for valr in row:
+                        # double check that all values are the same
+                        if int(valr) != int(row[0]):
+                            break
+                        else:
+                            in_a_row += 1
+                    if in_a_row == 3:
+                        # player row[0] won
+                        game_over = True
+                        winner = row[0]
                         break
-                    else:
-                        in_a_row += 1
-
-                if in_a_row == 3:
-                    game_over = True
-                    winner = col[0]
-                    break
 
     # Checking Diagonal
     # diag_win = False
-    # print("Checking Diagonal")
-    if not game_over:
-        ULC_2_LRC = layer.diagonal()
-        if ULC_2_LRC.all():
-            in_a_row = 0
-            # if line doesn't have zeros
-            for vald1 in ULC_2_LRC:
-                # double check that all values are the same
-                if int(vald1) != int(ULC_2_LRC[0]):
-                    break
-                else:
-                    in_a_row += 1
 
-            # diag_win = True
-            if in_a_row == 3:
-                game_over = True
-                winner = ULC_2_LRC[0]
+            break
 
-    # print("Checking Diagonal 2")
-    if not game_over:
-        LLC_2_URC = np.flipud(layer).diagonal()
-        if LLC_2_URC.all():
-            in_a_row = 0
-            # if line doesn't have zeros
-            for vald2 in LLC_2_URC:
-                # double check that all values are the same
-                if int(vald2) != int(LLC_2_URC[0]):
-                    break
-                else:
-                    in_a_row += 1
-            # diag_win = True
-            if in_a_row == 3:
-                game_over = True
-                winner = LLC_2_URC[0]
+        for diag in [board.diagonal(), np.flipud(board).diagonal()]:
+            if diag.all():
+                in_a_row = 0
+                # if line doesn't have zeros
+                for vald1 in diag:
+                    # double check that all values are the same
+                    if int(vald1) != int(diag[0]):
+                        break
+                    else:
+                        in_a_row += 1
+                if in_a_row == 3:
+                    game_over = True
+                    winner = diag[0]
 
     return game_over, winner
