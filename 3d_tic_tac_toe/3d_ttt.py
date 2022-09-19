@@ -3,6 +3,7 @@
 
 import numpy as np
 from numba import jit
+from tqdm import tqdm
 """import tensorflow as tf
 from tensorflow.keras.models import Sequential, load_model
 from tensorflow.keras.layers import Dense, Reshape, Flatten"""
@@ -19,11 +20,13 @@ ONES = np.ones((IN_A_ROW, IN_A_ROW, IN_A_ROW), dtype='int8')
 NEG_ONES = (np.ones((IN_A_ROW, IN_A_ROW, IN_A_ROW), dtype='int8') * -1)
 
 random.seed(time.time_ns())
+games_played = 0
+actual_play = False
 
 
 class BoardEnv:
+
     def __init__(self):
-        self.games_played = -1
         self.board = np.copy(EMPTY_BOARD)
         self.previous_board_O = np.copy(self.board)
         self.previous_board_X = np.copy(self.board)
@@ -36,6 +39,7 @@ class BoardEnv:
         self.reset()
 
     def reset(self):
+        global games_played
         """[[[0. 0. 0.]
             [0. 0. 0.]
             [0. 0. 0.]]
@@ -53,7 +57,8 @@ class BoardEnv:
         self.current_board = np.copy(self.board)
 
         self.game_over = False
-        self.games_played += 1
+        if actual_play:
+            games_played += 1
         # self.whose_turn = not self.whose_turn
 
     def vis(self):
@@ -72,23 +77,27 @@ class BoardEnv:
             for board_layer in orientation:
                 if self.game_over:
                     break
-                if board_layer.any():
-                    self.game_over, winner = check_layer_for_win(board_layer)
+                for board in [board_layer, board_layer.transpose()]:
+                    if self.game_over:
+                        break
+                    if board_layer.any():
+                        self.game_over, winner = check_layer_for_win(board)
         if not self.game_over:
             # special diagonals
             # self.board.diagonal() comes out as 3x3 so already single layer
             for diag in [self.board.diagonal(), np.fliplr(self.board).diagonal()]:
-                if not self.game_over:
-                    if diag.any():
-                        self.game_over, winner = check_layer_for_win(diag)
+                for diag_board in [diag, diag.transpose()]:
+                    if not self.game_over:
+                        if diag_board.any():
+                            self.game_over, winner = check_layer_for_win(diag_board)
 
         if board_filled and not self.game_over:
             self.game_over = True
             winner = 0
         return self.game_over, winner
 
-    def make_move(self, x, y, just_data=False):
-        move_made = False
+    def make_move(self, x: int, y: int, just_data=False):
+        move_made: bool = False
         self.current_board = np.copy(self.board)
         layer_num = 0
         for layer in self.board:
@@ -168,7 +177,8 @@ class BoardEnv:
                     print(f"{final_move} is acceptable")
                 break
             else:
-                print(f"it seems that {final_move} is not legal")
+                if verbose:
+                    print(f"it seems that {final_move} is not legal")
 
         done, winner_ = self.look_for_win()
         if done:
@@ -187,39 +197,129 @@ class BoardEnv:
         self.whose_turn = not self.whose_turn
 
 
-# for 2D
+class Player:
+    def __init__(self, sign=1):
+        self.sign = sign
+        self.score = 0
+        self.opponent_score = 0
+        self.Critic_model = Sequential()
+        self.Actor_model = Sequential()
+        self.do_not_init_a = False
+        self.do_not_init_c = False
 
-def check_layer_for_win(layer2d: np.ndarray):
+    def init_critic(self):
+        # Critic Model
+        # Looks at state and thinks its a good state for actor or not
+        self.Critic_model.add(Dense(9, input_shape=(3, 3, 3), activation='relu'))
+        self.Critic_model.add(Flatten())
+        self.Critic_model.add(Dense(9, activation='relu'))
+        self.Critic_model.add(Dense(9, activation='relu'))
+        self.Critic_model.add(Dense(1, activation='tanh'))
+        self.Critic_model.compile(
+            optimizer='adam',
+            loss='huber_loss',
+            metrics=['accuracy']
+        )
+        self.Critic_model.summary()
+
+    def init_actor(self):
+        # Actor trained on wins
+        self.Actor_model.add(Dense(18, input_shape=(4, 3, 3), activation='relu'))
+        self.Actor_model.add(Dense(18, activation='relu'))
+        self.Actor_model.add(Flatten())
+        self.Actor_model.add(Dense(27, activation='relu'))
+        self.Actor_model.add(Dense(9, activation='sigmoid'))
+        self.Actor_model.add(Reshape((3, 3)))
+        self.Actor_model.compile(
+            optimizer='adam',
+            loss='categorical_crossentropy',
+            metrics=['accuracy']
+        )
+        self.Actor_model.summary()
+
+    def teach_critc(self, state, value):
+        if not self.do_not_init_c:
+            self.init_critic()
+            self.do_not_init_c = True
+        div = int((len(state) * 0.7))
+        train_x = np.copy(state[:div]).astype('float32')
+        validation_x = np.copy(state[div:]).astype('float32')
+        train_y = np.copy(value[:div]).astype('float32')
+        validation_y = np.copy(value[div:]).astype('float32')
+
+        print(train_x.dtype)
+        print(train_y.dtype)
+        print(train_x.shape)
+        print(train_y.shape)
+
+        print(train_x)
+        print(train_y)
+
+        self.Critic_model.fit(train_x, train_y,  validation_data=(validation_x, validation_y), epochs=10)
+        self.Critic_model.save('/mnt/96a66be0-609e-43bd-a076-253e3c725b17/Python/RL testing/2D_tic_tac_toe/save_models/TTT2D_Critic')
+
+    def teach_actor(self, state, move):
+        if not self.do_not_init_a:
+            self.init_actor()
+            self.do_not_init_a = True
+        div = int((len(state) * 0.7))
+        train_x = np.copy(state[:div]).astype('float32')
+        validation_x = np.copy(state[div:]).astype('float32')
+        train_y = np.copy(move[:div]).astype('float32')
+        validation_y = np.copy(move[div:]).astype('float32')
+
+        print(train_x.dtype)
+        print(train_y.dtype)
+        print(train_x.shape)
+        print(train_y.shape)
+
+        print(train_x)
+        print(train_y)
+
+        self.Actor_model.fit(train_x, train_y, validation_data=(validation_x, validation_y), epochs=20)
+        self.Actor_model.save('/mnt/96a66be0-609e-43bd-a076-253e3c725b17/Python/RL testing/2D_tic_tac_toe/save_models/TTT2D_actor')
+
+    def load_models(self):
+        self.Critic_model = load_model(
+            '/mnt/96a66be0-609e-43bd-a076-253e3c725b17/Python/RL testing/2D_tic_tac_toe/save_models/TTT2D_Critic')
+        # self.Critic_model.summary()
+        self.do_not_init_c = True
+        self.Actor_model = load_model(
+            '/mnt/96a66be0-609e-43bd-a076-253e3c725b17/Python/RL testing/2D_tic_tac_toe/save_models/TTT2D_actor')
+        self.do_not_init_a = True
+
+
+# for 2D
+def check_layer_for_win(layer2d: np.array = EMPTY_BOARD[0]):
     game_over = False
     winner = 0
     # Checking horizontal and vertical
-    for board2d in [layer2d, np.copy(layer2d.transpose())]:
-        for row in board2d:
-            if game_over:
-                break
-            in_a_row = 0
-            if row.all():
-                # if line doesn't have zeros
-                for valr in row:
-                    # double check that all values are the same
-                    if int(valr) != int(row[0]):
-                        break
-                    else:
-                        in_a_row += 1
-                if in_a_row == IN_A_ROW:
-                    '''print(row)
-                    print('player won')'''
-                    game_over = True
-                    winner = row[0]
+    # for board2d in [layer2d, np.copy(layer2d.transpose())]:
+    for row in layer2d:
+        if game_over:
+            break
+        in_a_row = 0
+        if row.all():
+            # if line doesn't have zeros
+            for valr in row:
+                # double check that all values are the same
+                if int(valr) != int(row[0]):
                     break
+                else:
+                    in_a_row += 1
+            if in_a_row == IN_A_ROW:
+                '''print(row)
+                print('player won')'''
+                game_over = True
+                winner = row[0]
+                break
 
     '''[[0. 0. 0.]
         [0. 0. 0.]      Board/layer
         [0. 0. 0.]]'''
     # Checking Diagonal
-    for diag in [layer2d.diagonal(), np.flipud(layer2d).diagonal()]:
-        if game_over:
-            break
+    diag = layer2d.diagonal()
+    if not game_over:
         # if line doesn't have zeros
         if diag.all():
             in_a_row = 0
@@ -230,10 +330,26 @@ def check_layer_for_win(layer2d: np.ndarray):
                 else:
                     in_a_row += 1
             if in_a_row == IN_A_ROW:
-                print(row)
-                print('player won')
+                '''print(row)
+                print('player won')'''
                 game_over = True
                 winner = diag[0]
+    diag2 = np.flipud(layer2d).diagonal()
+    if not game_over:
+        # if line doesn't have zeros
+        if diag2.all():
+            in_a_row = 0
+            for vald1 in diag2:
+                # double check that all values are the same
+                if int(vald1) != int(diag2[0]):
+                    break
+                else:
+                    in_a_row += 1
+            if in_a_row == IN_A_ROW:
+                '''print(row)
+                print('player won')'''
+                game_over = True
+                winner = diag2[0]
 
     return game_over, winner
 
@@ -270,13 +386,24 @@ def visualize3d(board3d):
     plt.show()
 
 
-B1 = BoardEnv()
+list_of_boards = []
+for i in tqdm(range(500)):
+    list_of_boards.append(BoardEnv())
 
-while B1.games_played <= 10:
-    start = time.perf_counter()
-    B1.get_state(False, True)
-    if B1.game_over:
-        end = time.perf_counter()
-        print(str((end - start)*1000) + " milliseconds")
-        B1.vis()
-        B1.reset()
+avg = 0
+actual_play = True
+total = time.perf_counter()
+while games_played <= 1900:
+    for board in tqdm(list_of_boards):
+        start = time.perf_counter()
+        board.get_state(False, True)
+        if board.game_over:
+            end = time.perf_counter()
+            avg += ((end - start)*1000)
+            # print(str((end - start)*1000) + " milliseconds")
+            # board.vis()
+            board.reset()
+print("total: " + str(time.perf_counter() - total))
+avg /= games_played
+print("per game: " + str(avg) + " milliseconds")
+print(games_played)
