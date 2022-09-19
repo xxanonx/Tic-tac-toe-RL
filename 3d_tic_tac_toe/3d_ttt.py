@@ -4,9 +4,9 @@
 import numpy as np
 from numba import jit
 from tqdm import tqdm
-"""import tensorflow as tf
+import tensorflow as tf
 from tensorflow.keras.models import Sequential, load_model
-from tensorflow.keras.layers import Dense, Reshape, Flatten"""
+from tensorflow.keras.layers import Dense, Reshape, Flatten
 import random, time
 import matplotlib.pyplot as plt
 
@@ -77,19 +77,15 @@ class BoardEnv:
             for board_layer in orientation:
                 if self.game_over:
                     break
-                for board in [board_layer, board_layer.transpose()]:
-                    if self.game_over:
-                        break
-                    if board_layer.any():
-                        self.game_over, winner = check_layer_for_win(board)
+                if board_layer.any():
+                    self.game_over, winner = check_layer_for_win(board_layer)
         if not self.game_over:
             # special diagonals
             # self.board.diagonal() comes out as 3x3 so already single layer
             for diag in [self.board.diagonal(), np.fliplr(self.board).diagonal()]:
-                for diag_board in [diag, diag.transpose()]:
                     if not self.game_over:
-                        if diag_board.any():
-                            self.game_over, winner = check_layer_for_win(diag_board)
+                        if diag.any():
+                            self.game_over, winner = check_layer_for_win(diag)
 
         if board_filled and not self.game_over:
             self.game_over = True
@@ -201,34 +197,25 @@ class Player:
     def __init__(self, sign=1):
         self.sign = sign
         self.score = 0
-        self.opponent_score = 0
-        self.Critic_model = Sequential()
         self.Actor_model = Sequential()
         self.do_not_init_a = False
-        self.do_not_init_c = False
-
-    def init_critic(self):
-        # Critic Model
-        # Looks at state and thinks its a good state for actor or not
-        self.Critic_model.add(Dense(9, input_shape=(3, 3, 3), activation='relu'))
-        self.Critic_model.add(Flatten())
-        self.Critic_model.add(Dense(9, activation='relu'))
-        self.Critic_model.add(Dense(9, activation='relu'))
-        self.Critic_model.add(Dense(1, activation='tanh'))
-        self.Critic_model.compile(
-            optimizer='adam',
-            loss='huber_loss',
-            metrics=['accuracy']
-        )
-        self.Critic_model.summary()
 
     def init_actor(self):
         # Actor trained on wins
-        self.Actor_model.add(Dense(18, input_shape=(4, 3, 3), activation='relu'))
-        self.Actor_model.add(Dense(18, activation='relu'))
+        activate = ['sigmoid', 'relu', 'selu', 'linear', 'gelu']
+        number_of_layers = random.randint(2, 10)
+
+        minimum = (pow(IN_A_ROW, 3) * 2)
+        self.Actor_model.add(Dense(minimum, input_shape=(4, IN_A_ROW, IN_A_ROW, IN_A_ROW),
+                                   activation=random.choice(activate)))
+        self.Actor_model.add(Dense((minimum * 2), activation=random.choice(activate)))
         self.Actor_model.add(Flatten())
-        self.Actor_model.add(Dense(27, activation='relu'))
-        self.Actor_model.add(Dense(9, activation='sigmoid'))
+        for num in range(number_of_layers):
+            self.Actor_model.add(Dense(random.randint(((minimum / 2) - (num * 2)), minimum))
+                                 (activation=random.choice(activate)))
+
+        self.Actor_model.add(Dense(18, activation=random.choice(activate)))
+        self.Actor_model.add(Dense(9, activation=random.choice(activate)))
         self.Actor_model.add(Reshape((3, 3)))
         self.Actor_model.compile(
             optimizer='adam',
@@ -237,36 +224,15 @@ class Player:
         )
         self.Actor_model.summary()
 
-    def teach_critc(self, state, value):
-        if not self.do_not_init_c:
-            self.init_critic()
-            self.do_not_init_c = True
-        div = int((len(state) * 0.7))
-        train_x = np.copy(state[:div]).astype('float32')
-        validation_x = np.copy(state[div:]).astype('float32')
-        train_y = np.copy(value[:div]).astype('float32')
-        validation_y = np.copy(value[div:]).astype('float32')
-
-        print(train_x.dtype)
-        print(train_y.dtype)
-        print(train_x.shape)
-        print(train_y.shape)
-
-        print(train_x)
-        print(train_y)
-
-        self.Critic_model.fit(train_x, train_y,  validation_data=(validation_x, validation_y), epochs=10)
-        self.Critic_model.save('/mnt/96a66be0-609e-43bd-a076-253e3c725b17/Python/RL testing/2D_tic_tac_toe/save_models/TTT2D_Critic')
-
-    def teach_actor(self, state, move):
+    def teach_actor(self, states, moves):
         if not self.do_not_init_a:
             self.init_actor()
             self.do_not_init_a = True
-        div = int((len(state) * 0.7))
-        train_x = np.copy(state[:div]).astype('float32')
-        validation_x = np.copy(state[div:]).astype('float32')
-        train_y = np.copy(move[:div]).astype('float32')
-        validation_y = np.copy(move[div:]).astype('float32')
+        div = int((len(states) * 0.7))
+        train_x = np.copy(states[:div]).astype('float16')
+        validation_x = np.copy(states[div:]).astype('float16')
+        train_y = np.copy(moves[:div]).astype('float16')
+        validation_y = np.copy(moves[div:]).astype('float16')
 
         print(train_x.dtype)
         print(train_y.dtype)
@@ -277,49 +243,47 @@ class Player:
         print(train_y)
 
         self.Actor_model.fit(train_x, train_y, validation_data=(validation_x, validation_y), epochs=20)
-        self.Actor_model.save('/mnt/96a66be0-609e-43bd-a076-253e3c725b17/Python/RL testing/2D_tic_tac_toe/save_models/TTT2D_actor')
+        self.Actor_model.save(
+            f'/mnt/96a66be0-609e-43bd-a076-253e3c725b17/Python/RL testing/3D_tic_tac_toe/save_models/TTT3D_actor_{IN_A_ROW}iar')
 
-    def load_models(self):
-        self.Critic_model = load_model(
-            '/mnt/96a66be0-609e-43bd-a076-253e3c725b17/Python/RL testing/2D_tic_tac_toe/save_models/TTT2D_Critic')
-        # self.Critic_model.summary()
-        self.do_not_init_c = True
+    def load_model(self):
         self.Actor_model = load_model(
-            '/mnt/96a66be0-609e-43bd-a076-253e3c725b17/Python/RL testing/2D_tic_tac_toe/save_models/TTT2D_actor')
+            f'/mnt/96a66be0-609e-43bd-a076-253e3c725b17/Python/RL testing/3D_tic_tac_toe/save_models/TTT3D_actor_{IN_A_ROW}iar')
         self.do_not_init_a = True
 
 
 # for 2D
-def check_layer_for_win(layer2d: np.array = EMPTY_BOARD[0]):
+def check_layer_for_win(layer2d: np.ndarray):
     game_over = False
     winner = 0
     # Checking horizontal and vertical
-    # for board2d in [layer2d, np.copy(layer2d.transpose())]:
-    for row in layer2d:
-        if game_over:
-            break
-        in_a_row = 0
-        if row.all():
-            # if line doesn't have zeros
-            for valr in row:
-                # double check that all values are the same
-                if int(valr) != int(row[0]):
-                    break
-                else:
-                    in_a_row += 1
-            if in_a_row == IN_A_ROW:
-                '''print(row)
-                print('player won')'''
-                game_over = True
-                winner = row[0]
+    for board2d in [layer2d, np.copy(layer2d.transpose())]:
+        for row in board2d:
+            if game_over:
                 break
+            in_a_row = 0
+            if row.all():
+                # if line doesn't have zeros
+                for valr in row:
+                    # double check that all values are the same
+                    if int(valr) != int(row[0]):
+                        break
+                    else:
+                        in_a_row += 1
+                if in_a_row == IN_A_ROW:
+                    '''print(row)
+                    print('player won')'''
+                    game_over = True
+                    winner = row[0]
+                    break
 
     '''[[0. 0. 0.]
         [0. 0. 0.]      Board/layer
         [0. 0. 0.]]'''
     # Checking Diagonal
-    diag = layer2d.diagonal()
-    if not game_over:
+    for diag in [layer2d.diagonal(), np.flipud(layer2d).diagonal()]:
+        if game_over:
+            break
         # if line doesn't have zeros
         if diag.all():
             in_a_row = 0
@@ -334,22 +298,6 @@ def check_layer_for_win(layer2d: np.array = EMPTY_BOARD[0]):
                 print('player won')'''
                 game_over = True
                 winner = diag[0]
-    diag2 = np.flipud(layer2d).diagonal()
-    if not game_over:
-        # if line doesn't have zeros
-        if diag2.all():
-            in_a_row = 0
-            for vald1 in diag2:
-                # double check that all values are the same
-                if int(vald1) != int(diag2[0]):
-                    break
-                else:
-                    in_a_row += 1
-            if in_a_row == IN_A_ROW:
-                '''print(row)
-                print('player won')'''
-                game_over = True
-                winner = diag2[0]
 
     return game_over, winner
 
@@ -387,14 +335,15 @@ def visualize3d(board3d):
 
 
 list_of_boards = []
-for i in tqdm(range(500)):
+for i in range(500):
     list_of_boards.append(BoardEnv())
 
 avg = 0
 actual_play = True
 total = time.perf_counter()
-while games_played <= 1900:
-    for board in tqdm(list_of_boards):
+prog_bar = tqdm(total=2000)
+while games_played < 2000:
+    for board in list_of_boards:
         start = time.perf_counter()
         board.get_state(False, True)
         if board.game_over:
@@ -403,6 +352,11 @@ while games_played <= 1900:
             # print(str((end - start)*1000) + " milliseconds")
             # board.vis()
             board.reset()
+            prog_bar.update(1)
+            if games_played >= 2000:
+                break
+
+time.sleep(0.1)
 print("total: " + str(time.perf_counter() - total))
 avg /= games_played
 print("per game: " + str(avg) + " milliseconds")
