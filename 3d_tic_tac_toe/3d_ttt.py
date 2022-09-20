@@ -9,6 +9,7 @@ from tensorflow.keras.models import Sequential, load_model
 from tensorflow.keras.layers import Dense, Reshape, Flatten
 import random, time
 import matplotlib.pyplot as plt
+from dataclasses import dataclass
 
 """config = tf.compat.v1.ConfigProto()
 config.gpu_options.allow_growth = True
@@ -22,6 +23,18 @@ NEG_ONES = (np.ones((IN_A_ROW, IN_A_ROW, IN_A_ROW), dtype='int8') * -1)
 random.seed(time.time_ns())
 games_played = 0
 actual_play = False
+
+# dna related stuff
+activate = ['sigmoid', 'relu', 'selu', 'linear', 'gelu']
+# layers = ['dense']
+minimum = (pow(IN_A_ROW, 3) * 2)
+
+
+@dataclass
+class DnaStrand:
+    layer: str
+    size: int
+    activation: str
 
 
 class BoardEnv:
@@ -199,23 +212,46 @@ class Player:
         self.score = 0
         self.Actor_model = Sequential()
         self.do_not_init_a = False
+        self.dna = []
 
     def init_actor(self):
         # Actor trained on wins
-        activate = ['sigmoid', 'relu', 'selu', 'linear', 'gelu']
-        number_of_layers = random.randint(2, 10)
+        self.dna = []
 
-        minimum = (pow(IN_A_ROW, 3) * 2)
-        self.Actor_model.add(Dense(minimum, input_shape=(4, IN_A_ROW, IN_A_ROW, IN_A_ROW),
-                                   activation=random.choice(activate)))
-        self.Actor_model.add(Dense((minimum * 2), activation=random.choice(activate)))
-        self.Actor_model.add(Flatten())
-        for num in range(number_of_layers):
-            self.Actor_model.add(Dense(random.randint(((minimum / 2) - (num * 2)), minimum))
-                                 (activation=random.choice(activate)))
+        # creation of randomly generated actor
+        number_of_layers = random.randint(4, 14)
+        for layer in range(number_of_layers):
+            if layer == 0:
+                # first layer is always the same
+                size = minimum
+            elif layer == number_of_layers - 1:
+                # last layer is always the same
+                size = 9
+            else:
+                # any other layer
+                size = random.randint(((minimum / 2) - (layer * 2)), minimum)
+            self.dna.append(DnaStrand('Dense', size, random.choice(activate)))
 
-        self.Actor_model.add(Dense(18, activation=random.choice(activate)))
-        self.Actor_model.add(Dense(9, activation=random.choice(activate)))
+        self.make_actor()
+
+    def rebuild_actor(self):
+        del self.Actor_model
+        self.Actor_model = Sequential()
+        max_size = len(self.dna)
+
+    def make_actor(self):
+        number_of_layers = len(self.dna)
+        self.Actor_model.add(Dense(self.dna[0].size, input_shape=(4, IN_A_ROW, IN_A_ROW, IN_A_ROW),
+                                   activation=self.dna[0].activation))
+        strand_num = 0
+        for strand in self.dna:
+            if strand_num != 0:
+                if strand.layer.lower() == 'dense':
+                    self.Actor_model.add(Dense(strand.size, activation=strand.activation))
+            if strand_num == int(number_of_layers / 2):
+                # halfway through flatten
+                self.Actor_model.add(Flatten())
+
         self.Actor_model.add(Reshape((3, 3)))
         self.Actor_model.compile(
             optimizer='adam',
