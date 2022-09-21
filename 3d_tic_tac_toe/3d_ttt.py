@@ -26,6 +26,8 @@ actual_play = False
 
 # dna related stuff
 activate = ['sigmoid', 'relu', 'selu', 'linear', 'gelu']
+losses = ['categorical_crossentropy', 'binary_crossentropy', 'mean_absolute_error',
+          'mean_squared_error', 'sparse_categorical_crossentropy']
 # layers = ['dense']
 minimum = (pow(IN_A_ROW, 3) * 2)
 
@@ -213,6 +215,7 @@ class Player:
         self.Actor_model = Sequential()
         self.do_not_init_a = False
         self.dna = []
+        self.loss = ""
 
     def init_actor(self):
         # Actor trained on wins
@@ -231,13 +234,38 @@ class Player:
                 # any other layer
                 size = random.randint(((minimum / 2) - (layer * 2)), minimum)
             self.dna.append(DnaStrand('Dense', size, random.choice(activate)))
+        self.loss = random.choice(losses)
 
         self.make_actor()
 
-    def rebuild_actor(self):
+    def mutate_actor(self):
         del self.Actor_model
         self.Actor_model = Sequential()
         max_size = len(self.dna)
+        what_layers_mutated = []
+        # how many mutations
+        for mutation in range(random.randint(1, 4)):
+            where = random.randint(1, (max_size - 2))
+            type_of_mutation = random.randint(0, 3)
+            if type_of_mutation == 0:
+                # change layer size
+                self.dna[where].size = random.randint(((minimum / 2) - (where * 2)), minimum)
+            elif type_of_mutation == 1:
+                # change activation
+                self.dna[where].activation = random.choice(activate)
+            elif type_of_mutation == 2:
+                # delete strand
+                self.dna.pop(where)
+            elif type_of_mutation == 3:
+                # add strand
+                size = random.randint(((minimum / 2) - (where * 2)), minimum)
+                self.dna.insert(where, DnaStrand('Dense', size, random.choice(activate)))
+            elif type_of_mutation == 4:
+                # change loss
+                self.loss = random.choice(losses)
+            # new size in case dna got bigger or smaller
+            max_size = len(self.dna)
+        self.make_actor()
 
     def make_actor(self):
         number_of_layers = len(self.dna)
@@ -255,7 +283,7 @@ class Player:
         self.Actor_model.add(Reshape((3, 3)))
         self.Actor_model.compile(
             optimizer='adam',
-            loss='categorical_crossentropy',
+            loss=self.loss,
             metrics=['accuracy']
         )
         self.Actor_model.summary()
