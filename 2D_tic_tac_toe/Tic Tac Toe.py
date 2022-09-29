@@ -72,7 +72,7 @@ class Player:
         print(train_y)
 
         self.Critic_model.fit(train_x, train_y,  validation_data=(validation_x, validation_y), epochs=10)
-        self.Critic_model.save('/mnt/96a66be0-609e-43bd-a076-253e3c725b17/Python/RL testing/2D_tic_tac_toe/save_models/TTT2D_Critic')
+        self.Critic_model.save('/mnt/96a66be0-609e-43bd-a076-253e3c725b17/Python/RL testing/2D_tic_tac_toe/save_models/TTT2D_Critic_test')
 
     def teach_actor(self, state, move):
         if not self.do_not_init_a:
@@ -93,7 +93,7 @@ class Player:
         print(train_y)
 
         self.Actor_model.fit(train_x, train_y, validation_data=(validation_x, validation_y), epochs=20)
-        self.Actor_model.save('/mnt/96a66be0-609e-43bd-a076-253e3c725b17/Python/RL testing/2D_tic_tac_toe/save_models/TTT2D_actor')
+        self.Actor_model.save('/mnt/96a66be0-609e-43bd-a076-253e3c725b17/Python/RL testing/2D_tic_tac_toe/save_models/TTT2D_actor_test')
 
     def load_models(self):
         self.Critic_model = load_model(
@@ -586,17 +586,17 @@ class BoardEnv:
 
 b1 = BoardEnv()
 # print(b1.board)
-learning = False
+learning = True
 # how_much_off = []
 human_O = False
 one_shot = False
-b1.p1.load_models()
+# b1.p1.load_models()
 one_shot_1000 = False
 start_time = time.perf_counter()
 
-step = 5
+step = -1
 while True:
-    if (5 > b1.games_played % 300000 > 0 and len(b1.recorded_games) > 500000) or step > 4:
+    if (5 > b1.games_played % 3000 > 0 and len(b1.recorded_games) > 5000) or step > 4:
         if learning:
             b1.p1.teach_critc(b1.recorded_games, b1.recorded_scores)
             if step > 0:
@@ -620,7 +620,7 @@ while True:
                 b1.get_state(human=b1.whose_turn, random_play=False, verbose=True)
 
         else:
-            b1.get_state(human=False, random_play=b1.whose_turn, verbose=True)
+            b1.get_state(human=False, random_play=True , verbose=True)
 
     else:
         if not learning:
