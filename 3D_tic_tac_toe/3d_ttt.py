@@ -12,9 +12,9 @@ import matplotlib.pyplot as plt
 from dataclasses import dataclass
 from collections import deque
 
-"""config = tf.compat.v1.ConfigProto()
+config = tf.compat.v1.ConfigProto()
 config.gpu_options.allow_growth = True
-session = tf.compat.v1.InteractiveSession(config=config)"""
+session = tf.compat.v1.InteractiveSession(config=config)
 
 IN_A_ROW = 3
 MAX_LEN = 500000
@@ -205,6 +205,8 @@ class BoardEnv:
 
             if self.make_move(final_move[0], final_move[1], actor_answer):
                 if verbose:
+                    if actor_answer is not None:
+                        print(actor_answer)
                     print(f"{final_move} is acceptable")
                 break
             else:
@@ -334,11 +336,13 @@ class Player:
         print(train_y.dtype)
         print(train_x.shape)
         print(train_y.shape)
+        print(validation_x.shape)
+        print(validation_y.shape)
 
-        print(train_x)
-        print(train_y)
+        '''print(train_x)
+        print(train_y)'''
 
-        self.Actor_model.fit(train_x, train_y, validation_data=(validation_x, validation_y), epochs=5)
+        self.Actor_model.fit(train_x, train_y, validation_data=(validation_x, validation_y), epochs=1)
         self.Actor_model.save(
             f'/mnt/96a66be0-609e-43bd-a076-253e3c725b17/Python/RL testing/3D_tic_tac_toe/save_models/TTT3D_actor_{IN_A_ROW}iar')
 
@@ -440,9 +444,9 @@ def reward_previous_moves(moves, multiplier):
     return moves.copy()
 
 
-list_of_games = []
+list_of_games = deque(maxlen=MAX_LEN)
 list_of_moves = deque(maxlen=MAX_LEN)
-list_of_boards = deque(maxlen=MAX_LEN)
+list_of_boards = []
 randomness = 1.0
 for i in range(500):
     list_of_boards.append(BoardEnv())
@@ -451,6 +455,7 @@ actor = Player(dont_init=True)
 
 actual_play = True
 first_run = True
+I_want_to_play = True
 set_amount_of_games = 10000
 total = time.perf_counter()
 for gen in range(10):
@@ -474,22 +479,40 @@ for gen in range(10):
                     temp_moves_O = reward_previous_moves(board.move_history_O, -1)
                     temp_moves_X = reward_previous_moves(board.move_history_X, 1)
                 else:
+                    if random.randint(0, 10) <= 6:
+                        board.reset()
+                        prog_bar.update(1)
+                        continue
                     temp_moves_O = reward_previous_moves(board.move_history_O, -1)
                     temp_moves_X = reward_previous_moves(board.move_history_X, -1)
-                for i in board.board_history_O:
-                    i *= -1
-                list_of_moves.extend(temp_moves_X)
-                list_of_moves.extend(temp_moves_O)
+                tempBoard_hist = []
+                for i in board.board_history_O.copy():
+                    tempBoard_hist.append(i * -1)
+                list_of_moves.extend(temp_moves_X.copy())
+                list_of_moves.extend(temp_moves_O.copy())
                 list_of_games.extend(board.board_history_X.copy())
-                list_of_games.extend(board.board_history_O.copy())
+                list_of_games.extend(tempBoard_hist.copy())
+                if (len(list_of_games) - len(list_of_moves)) != 0:
+                    randomness = randomness
+                    pass
                 board.reset()
                 prog_bar.update(1)
                 if games_played >= set_amount_of_games:
                     break
     if first_run:
         first_run = False
+    print("difference in total length:" + str(len(list_of_games) - len(list_of_moves)))
     actor.teach_actor(np.array(list_of_games), np.array(list_of_moves))
-    randomness *= 0.95
+    if I_want_to_play:
+        against_me = list_of_boards[0]
+        against_me.reset()
+        while not against_me.game_over:
+            if against_me.whose_turn:
+                move = actor.Actor_model(np.array([np.copy(against_me.board)], dtype='float32'))[0].numpy()
+                against_me.get_state(False, False, actor_answer=move, verbose=True)
+            else:
+                against_me.get_state(True, verbose=True)
+    randomness *= 0.99
 time.sleep(0.1)
 end = (time.perf_counter() - total)
 print("total: " + str(end))
