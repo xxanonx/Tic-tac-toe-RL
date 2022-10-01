@@ -342,7 +342,7 @@ class Player:
         '''print(train_x)
         print(train_y)'''
 
-        self.Actor_model.fit(train_x, train_y, validation_data=(validation_x, validation_y), epochs=1)
+        self.Actor_model.fit(train_x, train_y, validation_data=(validation_x, validation_y), epochs=4)
         self.Actor_model.save(
             f'/mnt/96a66be0-609e-43bd-a076-253e3c725b17/Python/RL testing/3D_tic_tac_toe/save_models/TTT3D_actor_{IN_A_ROW}iar')
 
@@ -455,11 +455,12 @@ actor = Player(dont_init=True)
 
 actual_play = True
 first_run = True
-I_want_to_play = True
+I_want_to_play = False
 set_amount_of_games = 10000
 total = time.perf_counter()
-for gen in range(10):
+for gen in range(100):
     games_played = 0
+    print(gen)
     prog_bar = tqdm(total=set_amount_of_games)
     while games_played < set_amount_of_games:
         for board in list_of_boards:
@@ -467,7 +468,10 @@ for gen in range(10):
             if chance_of_random != 0 or first_run:
                 board.get_state(False, True)
             else:
-                move = actor.Actor_model(np.array([np.copy(board.board)], dtype='float32'))[0].numpy()
+                if board.whose_turn:
+                    move = actor.Actor_model(np.array([np.copy(board.board)], dtype='float32'))[0].numpy()
+                else:
+                    move = actor.Actor_model((np.array([np.copy(board.board)], dtype='float32')) * -1)[0].numpy()
                 board.get_state(False, False, actor_answer=move)
             if board.game_over:
                 temp_moves_X = []
@@ -512,7 +516,7 @@ for gen in range(10):
                 against_me.get_state(False, False, actor_answer=move, verbose=True)
             else:
                 against_me.get_state(True, verbose=True)
-    randomness *= 0.99
+    randomness *= 0.98
 time.sleep(0.1)
 end = (time.perf_counter() - total)
 print("total: " + str(end))
