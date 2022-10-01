@@ -10,12 +10,14 @@ from tensorflow.keras.layers import Dense, Reshape, Flatten
 import random, time
 import matplotlib.pyplot as plt
 from dataclasses import dataclass
+from collections import deque
 
 """config = tf.compat.v1.ConfigProto()
 config.gpu_options.allow_growth = True
 session = tf.compat.v1.InteractiveSession(config=config)"""
 
 IN_A_ROW = 3
+MAX_LEN = 500000
 EMPTY_BOARD = np.zeros((IN_A_ROW, IN_A_ROW, IN_A_ROW), dtype='int8')
 EMPTY_BOARD_MOVES = np.zeros((IN_A_ROW, IN_A_ROW), dtype='float16')
 ONES = np.ones((IN_A_ROW, IN_A_ROW, IN_A_ROW), dtype='int8')
@@ -23,6 +25,7 @@ NEG_ONES = (np.ones((IN_A_ROW, IN_A_ROW, IN_A_ROW), dtype='int8') * -1)
 
 random.seed(time.time_ns())
 actual_play = False
+count_of_bypasses = 0
 
 # dna related stuff
 activate = ['sigmoid', 'relu', 'selu', 'linear', 'gelu']
@@ -132,12 +135,12 @@ class BoardEnv:
                 move2[y][x] = 1
                 if self.whose_turn:
                     self.board[layer_num][y][x] = 1
-                    self.board_history_X.append(np.copy(self.board))
+                    self.board_history_X.append(np.copy(self.current_board))
                     self.move_history_X.append(np.copy(move2))
                     move_made = True
                 else:
                     self.board[layer_num][y][x] = -1
-                    self.board_history_O.append(np.copy(self.board))
+                    self.board_history_O.append(np.copy(self.current_board))
                     self.move_history_O.append(np.copy(move2))
                     move_made = True
             layer_num += 1
@@ -146,7 +149,10 @@ class BoardEnv:
 
     def get_state(self, human=False, random_play=False, verbose=False, actor_answer=None):
         # Whose turn matters and human matters
+        global count_of_bypasses
         input_max = (IN_A_ROW - 1)
+        error_in_row = 0
+        actor_bypass = False
         while True:
             final_move = [-20, -20]
             if human:
@@ -193,7 +199,7 @@ class BoardEnv:
                     print(f"{move} IS INVALID")
 
             else:
-                if random_play:
+                if random_play or actor_bypass:
                     final_move[0] = random.randint(0, input_max)
                     final_move[1] = random.randint(0, input_max)
 
@@ -203,8 +209,13 @@ class BoardEnv:
                 break
             else:
                 if not random_play and actor_answer is not None:
+                    error_in_row += 1
                     armax = tf.argmax(actor_answer).numpy()
                     actor_answer[armax.max()][armax.argmax()] = -1
+                    if error_in_row > 5:
+                        actor_answer = None
+                        actor_bypass = True
+                        count_of_bypasses += 1
                 if verbose:
                     print(f"it seems that {final_move} is not legal")
 
@@ -225,37 +236,40 @@ class BoardEnv:
 
 
 class Player:
-    def __init__(self, sign=1):
+    def __init__(self, sign=1, dont_init=False):
         self.sign = sign
         self.score = 0
         self.Actor_model = Sequential()
-        self.do_not_init_a = False
+        self.do_not_init_a = dont_init
         self.dna = []
         self.loss = ""
         if not self.do_not_init_a:
             self.init_actor()
             self.do_not_init_a = True
+        else:
+            self.load_model()
 
     def init_actor(self):
         # Actor trained on wins
-        self.dna = []
+        if not self.do_not_init_a:
+            self.dna = []
 
-        # creation of randomly generated actor
-        number_of_layers = random.randint(4, 14)
-        for layer in range(number_of_layers):
-            if layer == 0:
-                # first layer is always the same
-                size = minimum
-            elif layer == number_of_layers - 1:
-                # last layer is always the same
-                size = 9
-            else:
-                # any other layer
-                size = random.randint(((minimum / 2) - (layer * 2)), minimum)
-            self.dna.append(DnaStrand('Dense', size, random.choice(activate)))
-        self.loss = random.choice(losses)
+            # creation of randomly generated actor
+            number_of_layers = random.randint(4, 14)
+            for layer in range(number_of_layers):
+                if layer == 0:
+                    # first layer is always the same
+                    size = minimum
+                elif layer == number_of_layers - 1:
+                    # last layer is always the same
+                    size = 9
+                else:
+                    # any other layer
+                    size = random.randint(((minimum / 2) - (layer * 2)), minimum)
+                self.dna.append(DnaStrand('Dense', size, random.choice(activate)))
+            self.loss = random.choice(losses)
 
-        self.make_actor()
+            self.make_actor()
 
     def mutate_actor(self, override_max_number_of_mutations=4):
         del self.Actor_model
@@ -311,10 +325,10 @@ class Player:
 
     def teach_actor(self, states, moves):
         div = int((len(states) * 0.7))
-        train_x = np.copy(states[:div]).astype('float16')
-        validation_x = np.copy(states[div:]).astype('float16')
-        train_y = np.copy(moves[:div]).astype('float16')
-        validation_y = np.copy(moves[div:]).astype('float16')
+        train_x = np.copy(states[:div]).astype('float32')
+        validation_x = np.copy(states[div:]).astype('float32')
+        train_y = np.copy(moves[:div]).astype('float32')
+        validation_y = np.copy(moves[div:]).astype('float32')
 
         print(train_x.dtype)
         print(train_y.dtype)
@@ -324,11 +338,12 @@ class Player:
         print(train_x)
         print(train_y)
 
-        self.Actor_model.fit(train_x, train_y, validation_data=(validation_x, validation_y), epochs=20)
+        self.Actor_model.fit(train_x, train_y, validation_data=(validation_x, validation_y), epochs=5)
         self.Actor_model.save(
             f'/mnt/96a66be0-609e-43bd-a076-253e3c725b17/Python/RL testing/3D_tic_tac_toe/save_models/TTT3D_actor_{IN_A_ROW}iar')
 
     def load_model(self):
+        print("loading model!")
         self.Actor_model = load_model(
             f'/mnt/96a66be0-609e-43bd-a076-253e3c725b17/Python/RL testing/3D_tic_tac_toe/save_models/TTT3D_actor_{IN_A_ROW}iar')
         self.do_not_init_a = True
@@ -420,25 +435,25 @@ def reward_previous_moves(moves, multiplier):
     moves.reverse()
     for move in moves:
         move *= multiplier
-        multiplier /= 2
+        multiplier *= 0.8
     moves.reverse()
     return moves.copy()
 
 
 list_of_games = []
-list_of_moves = []
-list_of_boards = []
+list_of_moves = deque(maxlen=MAX_LEN)
+list_of_boards = deque(maxlen=MAX_LEN)
 randomness = 1.0
 for i in range(500):
     list_of_boards.append(BoardEnv())
 
-actor = Player()
+actor = Player(dont_init=True)
 
 actual_play = True
 first_run = True
 set_amount_of_games = 10000
 total = time.perf_counter()
-for gen in range(20):
+for gen in range(10):
     games_played = 0
     prog_bar = tqdm(total=set_amount_of_games)
     while games_played < set_amount_of_games:
@@ -447,7 +462,7 @@ for gen in range(20):
             if chance_of_random != 0 or first_run:
                 board.get_state(False, True)
             else:
-                move = actor.Actor_model(np.copy(board.board))
+                move = actor.Actor_model(np.array([np.copy(board.board)], dtype='float32'))[0].numpy()
                 board.get_state(False, False, actor_answer=move)
             if board.game_over:
                 temp_moves_X = []
@@ -478,6 +493,7 @@ for gen in range(20):
 time.sleep(0.1)
 end = (time.perf_counter() - total)
 print("total: " + str(end))
-end /= (games_played * 20)
+end /= (games_played * 10)
 print("per game: " + str(end) + " milliseconds")
-print(games_played * 20)
+print(games_played * 10)
+print("count_of_bypasses: " + str(count_of_bypasses))
