@@ -6,7 +6,7 @@ from numba import jit
 from tqdm import tqdm
 import tensorflow as tf
 from tensorflow.keras.models import Sequential, load_model
-from tensorflow.keras.layers import Dense, Reshape, Flatten
+from tensorflow.keras.layers import Dense, Reshape, Flatten, Dropout
 import random, time
 import matplotlib.pyplot as plt
 from dataclasses import dataclass
@@ -44,7 +44,7 @@ class DnaStrand:
 
 class BoardEnv:
 
-    def __init__(self):
+    def __init__(self, seed=0):
         self.board = np.copy(EMPTY_BOARD)
         self.board_history_O = []
         self.board_history_X = []
@@ -54,6 +54,9 @@ class BoardEnv:
         self.game_over = False
         self.whose_turn = True
         self.winner = 0
+        self.random_ = random.Random()
+        self.random_.seed(seed)
+        self.how_many_times_won = 0
         # -1 = O and 1 = X
         # false = 0 and true = X
 
@@ -80,6 +83,7 @@ class BoardEnv:
         self.current_board = np.copy(self.board)
 
         self.game_over = False
+        self.how_many_times_won = 0
         if actual_play:
             games_played += 1
         # self.whose_turn = not self.whose_turn
@@ -91,31 +95,48 @@ class BoardEnv:
         # if no zeros are found the game is over, this can help tell if it's a tie
         board_filled = self.board.all()
         winner = 0
+        temp_times_won = 0
+        temp_game_over_buffer = []
+        temp_winner_buffer = []
         # look at board from bottom to top, side to side, and other side to side
-
-        # checking layers
-        for orientation in [self.board,
-                            np.moveaxis(self.board, 0, -1),
-                            np.moveaxis(self.board, -1, 0)]:
-            for board_layer in orientation:
-                if self.game_over:
-                    break
-                if board_layer.any():
-                    self.game_over, winner = check_layer_for_win(board_layer)
         if not self.game_over:
+            # checking layers
+            for orientation in [self.board,
+                                np.moveaxis(self.board, 0, -1),
+                                np.moveaxis(self.board, -1, 0)]:
+                for board_layer in orientation:
+                    if board_layer.any():
+                        temp_game_over, temp_winner, temp_times_won = check_layer_for_win(board_layer)
+                        if temp_times_won > self.how_many_times_won:
+                            self.how_many_times_won += temp_times_won
+                        temp_game_over_buffer.append(temp_game_over)
+                        temp_winner_buffer.append(temp_winner)
+            if self.how_many_times_won >= 3:
+                self.how_many_times_won /= 3
             # special diagonals
             # self.board.diagonal() comes out as 3x3 so already single layer
             for diag in [self.board.diagonal(), np.fliplr(self.board).diagonal()]:
-                    if not self.game_over:
-                        if diag.any():
-                            self.game_over, winner = check_layer_for_win(diag)
+                if diag.any():
+                    temp_game_over, temp_winner, temp_times_won = check_layer_for_win(diag, True)
+                    self.how_many_times_won += temp_times_won
+                    temp_game_over_buffer.append(temp_game_over)
+                    temp_winner_buffer.append(temp_winner)
+
+            for game_over in temp_game_over_buffer:
+                self.game_over = game_over
+                if self.game_over:
+                    for winner_ in temp_winner_buffer:
+                        if winner_ != 0:
+                            winner = winner_
+                            break
+                    break
 
         if board_filled and not self.game_over:
             self.game_over = True
             winner = 0
         return self.game_over, winner
 
-    def make_move(self, x: int, y: int, actor_answer=None):
+    def make_move(self, x: int, y: int, actor_answer=None, verbose=False):
         move_made: bool = False
         actor_decides = actor_answer is not None
         self.current_board = np.copy(self.board)
@@ -127,7 +148,7 @@ class BoardEnv:
 
         layer_num = 0
         for layer in self.board:
-            if move_made:
+            if move_made or self.game_over:
                 break
             if layer[y][x] == 0:
                 # move2 is used for move data
@@ -144,6 +165,8 @@ class BoardEnv:
                     self.move_history_O.append(np.copy(move2))
                     move_made = True
             layer_num += 1
+        if move_made and verbose:
+            print(f"[{x}, {y}] is acceptable")
         # return false if the move can't be made
         return move_made
 
@@ -153,7 +176,13 @@ class BoardEnv:
         input_max = (IN_A_ROW - 1)
         error_in_row = 0
         actor_bypass = False
+        if self.game_over:
+            return
+        if verbose:
+            visualize3d(self.board)
         while True:
+            if self.game_over:
+                break
             final_move = [-20, -20]
             if human:
                 if self.whose_turn:
@@ -178,7 +207,6 @@ class BoardEnv:
                                     line += "   |"
                             print(line)
                         print('------')
-                visualize3d(self.board)
                 while True:
                     move = input("what is your move? ")
                     if move.__contains__(","):
@@ -200,14 +228,15 @@ class BoardEnv:
 
             else:
                 if random_play or actor_bypass:
-                    final_move[0] = random.randint(0, input_max)
-                    final_move[1] = random.randint(0, input_max)
+                    final_move[0] = self.random_.randint(0, input_max)
+                    final_move[1] = self.random_.randint(0, input_max)
 
-            if self.make_move(final_move[0], final_move[1], actor_answer):
+            if self.make_move(final_move[0], final_move[1], actor_answer, verbose):
                 if verbose:
                     if actor_answer is not None:
                         print(actor_answer)
-                    print(f"{final_move} is acceptable")
+                    else:
+                        print(f"{final_move} is acceptable")
                 break
             else:
                 if not random_play and actor_answer is not None:
@@ -221,7 +250,7 @@ class BoardEnv:
                 if verbose:
                     print(f"it seems that {final_move} is not legal")
 
-        done, self.winner =self.look_for_win()
+        done, self.winner = self.look_for_win()
         if done:
             if verbose:
                 print(self.board)
@@ -245,6 +274,10 @@ class Player:
         self.do_not_init_a = dont_init
         self.dna = []
         self.loss = ""
+        self.loss_history = []
+        self.accuracy_history = []
+        self.val_loss_history = []
+        self.val_accuracy_history = []
         if not self.do_not_init_a:
             self.init_actor()
             self.do_not_init_a = True
@@ -314,6 +347,7 @@ class Player:
             if strand_num == int(number_of_layers / 2):
                 # halfway through flatten
                 self.Actor_model.add(Flatten())
+                self.Actor_model.add(Dropout(0.25))
             strand_num += 1
 
         self.Actor_model.add(Reshape((3, 3)))
@@ -342,7 +376,12 @@ class Player:
         '''print(train_x)
         print(train_y)'''
 
-        self.Actor_model.fit(train_x, train_y, validation_data=(validation_x, validation_y), epochs=4)
+        temp_fitting_history = self.Actor_model.fit(train_x, train_y, validation_data=(validation_x, validation_y),
+                                                    epochs=4, shuffle=True)
+        self.loss_history.extend(temp_fitting_history.history['loss'])
+        self.accuracy_history.extend(temp_fitting_history.history['accuracy'])
+        self.val_loss_history.extend(temp_fitting_history.history['val_loss'])
+        self.val_accuracy_history.extend(temp_fitting_history.history['val_accuracy'])
         self.Actor_model.save(
             f'/mnt/96a66be0-609e-43bd-a076-253e3c725b17/Python/RL testing/3D_tic_tac_toe/save_models/TTT3D_actor_{IN_A_ROW}iar')
 
@@ -352,39 +391,50 @@ class Player:
             f'/mnt/96a66be0-609e-43bd-a076-253e3c725b17/Python/RL testing/3D_tic_tac_toe/save_models/TTT3D_actor_{IN_A_ROW}iar')
         self.do_not_init_a = True
 
+    def vis_training(self):
+        plt.plot(self.loss_history, label='loss_history')
+        plt.plot(self.accuracy_history, label='accuracy_history')
+        plt.plot(self.val_loss_history, label='val_loss_history')
+        plt.plot(self.val_accuracy_history, label='val_accuracy_history')
+        plt.legend(loc='lower right')
+        plt.show()
+
 
 # for 2D
-def check_layer_for_win(layer2d: np.ndarray):
+def check_layer_for_win(layer2d: np.ndarray, just_diag= False):
     game_over = False
     winner = 0
+    times_won = 0
     # Checking horizontal and vertical
-    for board2d in [layer2d, np.copy(layer2d.transpose())]:
-        for row in board2d:
-            if game_over:
-                break
-            in_a_row = 0
-            if row.all():
-                # if line doesn't have zeros
-                for valr in row:
-                    # double check that all values are the same
-                    if int(valr) != int(row[0]):
+    if not just_diag:
+        for board2d in [layer2d, np.copy(layer2d.transpose())]:
+            for row in board2d:
+                '''if game_over:
+                    break'''
+                in_a_row = 0
+                if row.all():
+                    # if line doesn't have zeros
+                    for valr in row:
+                        # double check that all values are the same
+                        if int(valr) != int(row[0]):
+                            break
+                        else:
+                            in_a_row += 1
+                    if in_a_row == IN_A_ROW:
+                        '''print(row)
+                        print('player won')'''
+                        game_over = True
+                        winner = row[0]
+                        times_won += 1
                         break
-                    else:
-                        in_a_row += 1
-                if in_a_row == IN_A_ROW:
-                    '''print(row)
-                    print('player won')'''
-                    game_over = True
-                    winner = row[0]
-                    break
 
     '''[[0. 0. 0.]
         [0. 0. 0.]      Board/layer
         [0. 0. 0.]]'''
     # Checking Diagonal
     for diag in [layer2d.diagonal(), np.flipud(layer2d).diagonal()]:
-        if game_over:
-            break
+        '''if game_over:
+            break'''
         # if line doesn't have zeros
         if diag.all():
             in_a_row = 0
@@ -399,8 +449,9 @@ def check_layer_for_win(layer2d: np.ndarray):
                 print('player won')'''
                 game_over = True
                 winner = diag[0]
+                times_won += 1
 
-    return game_over, winner
+    return game_over, winner, times_won
 
 
 # for 3d
@@ -447,67 +498,115 @@ def reward_previous_moves(moves, multiplier):
 list_of_games = deque(maxlen=MAX_LEN)
 list_of_moves = deque(maxlen=MAX_LEN)
 list_of_boards = []
-randomness = 1.0
+randomness = 100
+tempSeed = time.time_ns()
 for i in range(500):
-    list_of_boards.append(BoardEnv())
+    list_of_boards.append(BoardEnv(tempSeed + i))
 
 actor = Player(dont_init=True)
 
 actual_play = True
 first_run = True
 I_want_to_play = False
+I_want_to_watch = False
 set_amount_of_games = 10000
 total = time.perf_counter()
-for gen in range(100):
+for gen in range(20):
     games_played = 0
     print(gen)
     prog_bar = tqdm(total=set_amount_of_games)
-    while games_played < set_amount_of_games:
-        for board in list_of_boards:
-            chance_of_random = random.randint(0, int(randomness * 100))
-            if chance_of_random != 0 or first_run:
-                board.get_state(False, True)
-            else:
-                if board.whose_turn:
-                    move = actor.Actor_model(np.array([np.copy(board.board)], dtype='float32'))[0].numpy()
+    if not I_want_to_play:
+        while games_played < set_amount_of_games:
+            for board in list_of_boards:
+                if not board.game_over:
+                    chance_of_random = random.randint(0, int(randomness * 100))
+                    if chance_of_random != 0 or first_run:
+                        board.get_state(False, True)
+                    else:
+                        if board.whose_turn:
+                            move = actor.Actor_model(np.array([np.copy(board.board)], dtype='float32'))[0].numpy()
+                        else:
+                            move = actor.Actor_model((np.array([np.copy(board.board)], dtype='float32')) * -1)[0].numpy()
+                        board.get_state(False, False, actor_answer=move)
+                        # If I want to watch and its board 0 of the 500
+                        if I_want_to_watch and board.random_ == list_of_boards[0].random_ and board.game_over:
+                            print(move)
+                            board.vis()
                 else:
-                    move = actor.Actor_model((np.array([np.copy(board.board)], dtype='float32')) * -1)[0].numpy()
-                board.get_state(False, False, actor_answer=move)
-            if board.game_over:
-                temp_moves_X = []
-                temp_moves_O = []
-                if board.winner == -1:
-                    temp_moves_O = reward_previous_moves(board.move_history_O, 1)
-                    temp_moves_X = reward_previous_moves(board.move_history_X, -1)
-                elif board.winner == 1:
-                    temp_moves_O = reward_previous_moves(board.move_history_O, -1)
-                    temp_moves_X = reward_previous_moves(board.move_history_X, 1)
-                else:
-                    if random.randint(0, 10) <= 6:
-                        board.reset()
-                        prog_bar.update(1)
-                        continue
-                    temp_moves_O = reward_previous_moves(board.move_history_O, -1)
-                    temp_moves_X = reward_previous_moves(board.move_history_X, -1)
-                tempBoard_hist = []
-                for i in board.board_history_O.copy():
-                    tempBoard_hist.append(i * -1)
-                list_of_moves.extend(temp_moves_X.copy())
-                list_of_moves.extend(temp_moves_O.copy())
-                list_of_games.extend(board.board_history_X.copy())
-                list_of_games.extend(tempBoard_hist.copy())
-                if (len(list_of_games) - len(list_of_moves)) != 0:
-                    randomness = randomness
-                    pass
-                board.reset()
-                prog_bar.update(1)
-                if games_played >= set_amount_of_games:
-                    break
-    if first_run:
-        first_run = False
-    print("difference in total length:" + str(len(list_of_games) - len(list_of_moves)))
-    actor.teach_actor(np.array(list_of_games), np.array(list_of_moves))
-    if I_want_to_play:
+                    temp_moves_X = []
+                    temp_moves_O = []
+                    if I_want_to_watch and board.how_many_times_won > 2:
+                        if board.winner == 1:
+                            print("RED")
+                        elif board.winner == -1:
+                            print("BLUE")
+                        print(board.how_many_times_won)
+                        board.vis()
+
+                        '''for i in (board.board_history_O, board.board_history_X):
+                            for ii in i:
+                                visualize3d(ii)'''
+
+                    if board.winner == -1:
+                        temp_moves_O = reward_previous_moves(board.move_history_O, board.how_many_times_won)
+                        temp_moves_X = reward_previous_moves(board.move_history_X, -1)
+                    elif board.winner == 1:
+                        temp_moves_O = reward_previous_moves(board.move_history_O, -1)
+                        temp_moves_X = reward_previous_moves(board.move_history_X, board.how_many_times_won)
+                    else:
+                        if random.randint(0, 10) <= 6:
+                            board.reset()
+                            prog_bar.update(1)
+                            continue
+                        temp_moves_O = reward_previous_moves(board.move_history_O, -1)
+                        temp_moves_X = reward_previous_moves(board.move_history_X, -1)
+                    tempBoard_hist_O = []
+                    for i in board.board_history_O.copy():
+                        tempBoard_hist_O.append(i * -1)
+                    if random.randint(0, 500) != 0:
+                        if not board.board_history_X[0][0].any():
+                            temp_moves_X.pop(0)
+                            board.board_history_X.pop(0)
+                        elif not tempBoard_hist_O[0].any():
+                            temp_moves_O.pop(0)
+                            tempBoard_hist_O.pop(0)
+
+                    # Hopefully actor can learn from losing maybe to go where it lost to
+                    if board.winner == -1:
+                        temp_moves_X.append(np.copy(temp_moves_O[-1]))
+                        board.board_history_X.append(np.copy(board.board_history_X[-1]))
+                    elif board.winner == 1:
+                        temp_moves_O.append(np.copy(temp_moves_X[-1]))
+                        tempBoard_hist_O.append(np.copy(tempBoard_hist_O[-1]))
+
+                    # Because up to this point we have a python list of np.arrays,
+                    # we shall iterate over the list and copy items one at a time
+                    # perhaps this will help with the weird moves the actor currently makes
+                    '''list_of_moves.extend(temp_moves_X.copy())
+                    list_of_moves.extend(temp_moves_O.copy())
+                    list_of_games.extend(board.board_history_X.copy())
+                    list_of_games.extend(tempBoard_hist_O.copy())'''
+                    for moves in (temp_moves_X, temp_moves_O):
+                        for single_move in moves:
+                            list_of_moves.append(np.copy(single_move))
+
+                    for games in (board.board_history_X, tempBoard_hist_O):
+                        for single_game in games:
+                            list_of_games.append(np.copy(single_game))
+
+                    if (len(list_of_games) - len(list_of_moves)) != 0:
+                        print("Training data not the same length!")
+
+                    board.reset()
+                    prog_bar.update(1)
+                    if games_played >= set_amount_of_games:
+                        break
+
+        if first_run:
+            first_run = False
+        print("difference in total length:" + str(len(list_of_games) - len(list_of_moves)))
+        actor.teach_actor(np.array(list_of_games), np.array(list_of_moves))
+    else:
         against_me = list_of_boards[0]
         against_me.reset()
         while not against_me.game_over:
@@ -515,12 +614,16 @@ for gen in range(100):
                 move = actor.Actor_model(np.array([np.copy(against_me.board)], dtype='float32'))[0].numpy()
                 against_me.get_state(False, False, actor_answer=move, verbose=True)
             else:
-                against_me.get_state(True, verbose=True)
+                if I_want_to_watch:
+                    against_me.get_state(random_play=True, verbose=True)
+                else:
+                    against_me.get_state(True, verbose=True)
     randomness *= 0.98
 time.sleep(0.1)
 end = (time.perf_counter() - total)
 print("total: " + str(end))
-end /= (games_played * 10)
+end /= (games_played * 20)
 print("per game: " + str(end) + " milliseconds")
-print(games_played * 10)
+print(games_played * 20)
 print("count_of_bypasses: " + str(count_of_bypasses))
+actor.vis_training()
