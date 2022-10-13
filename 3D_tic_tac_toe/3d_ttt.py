@@ -7,7 +7,7 @@ from tqdm import tqdm
 import tensorflow as tf
 from tensorflow.keras.models import Sequential, load_model
 from tensorflow.keras.layers import Dense, Reshape, Flatten, Dropout
-import random, time
+import random, time, pickle
 import matplotlib.pyplot as plt
 from dataclasses import dataclass
 from collections import deque
@@ -50,7 +50,7 @@ class BoardEnv:
         self.board_history_X = []
         self.move_history_O = []
         self.move_history_X = []
-        self.current_board = np.copy(self.board)
+        self.previous_board = np.copy(self.board)
         self.game_over = False
         self.whose_turn = True
         self.winner = 0
@@ -80,7 +80,7 @@ class BoardEnv:
         self.board_history_X = []
         self.move_history_O = []
         self.move_history_X = []
-        self.current_board = np.copy(self.board)
+        self.previous_board = np.copy(self.board)
 
         self.game_over = False
         self.how_many_times_won = 0
@@ -139,7 +139,7 @@ class BoardEnv:
     def make_move(self, x: int, y: int, actor_answer=None, verbose=False):
         move_made: bool = False
         actor_decides = actor_answer is not None
-        self.current_board = np.copy(self.board)
+        self.previous_board = np.copy(self.board)
 
         if actor_decides:
             armax = tf.argmax(actor_answer).numpy()
@@ -156,12 +156,12 @@ class BoardEnv:
                 move2[y][x] = 1
                 if self.whose_turn:
                     self.board[layer_num][y][x] = 1
-                    self.board_history_X.append(np.copy(self.current_board))
+                    self.board_history_X.append(np.copy(self.previous_board))
                     self.move_history_X.append(np.copy(move2))
                     move_made = True
                 else:
                     self.board[layer_num][y][x] = -1
-                    self.board_history_O.append(np.copy(self.current_board))
+                    self.board_history_O.append(np.copy(self.previous_board))
                     self.move_history_O.append(np.copy(move2))
                     move_made = True
             layer_num += 1
@@ -176,9 +176,10 @@ class BoardEnv:
         input_max = (IN_A_ROW - 1)
         error_in_row = 0
         actor_bypass = False
+        temp_list_of_failed_moves = []
         if self.game_over:
             return
-        if verbose:
+        if verbose and human:
             visualize3d(self.board)
         while True:
             if self.game_over:
@@ -239,14 +240,21 @@ class BoardEnv:
                         print(f"{final_move} is acceptable")
                 break
             else:
+                error_in_row += 1
+                temp_move = np.copy(EMPTY_BOARD_MOVES)
                 if not random_play and actor_answer is not None:
-                    error_in_row += 1
                     armax = tf.argmax(actor_answer).numpy()
+                    temp_move[armax.max()][armax.argmax()] = -1
                     actor_answer[armax.max()][armax.argmax()] = -1
-                    if error_in_row > 5:
+                else:
+                    temp_move[final_move[1]][final_move[0]] = -1
+                temp_list_of_failed_moves.append(np.copy(temp_move))
+
+                if error_in_row > 5:
+                    if actor_answer is not None:
                         actor_answer = None
                         actor_bypass = True
-                        count_of_bypasses += 1
+                    count_of_bypasses += 1
                 if verbose:
                     print(f"it seems that {final_move} is not legal")
 
@@ -264,6 +272,7 @@ class BoardEnv:
 
         # end of turn
         self.whose_turn = not self.whose_turn
+        return temp_list_of_failed_moves
 
 
 class Player:
@@ -278,6 +287,7 @@ class Player:
         self.accuracy_history = []
         self.val_loss_history = []
         self.val_accuracy_history = []
+        self.teaching_with_pickle = False
         if not self.do_not_init_a:
             self.init_actor()
             self.do_not_init_a = True
@@ -384,12 +394,29 @@ class Player:
         self.val_accuracy_history.extend(temp_fitting_history.history['val_accuracy'])
         self.Actor_model.save(
             f'/mnt/96a66be0-609e-43bd-a076-253e3c725b17/Python/RL testing/3D_tic_tac_toe/save_models/TTT3D_actor_{IN_A_ROW}iar')
+        self.write_pickles(states, moves)
 
     def load_model(self):
         print("loading model!")
         self.Actor_model = load_model(
             f'/mnt/96a66be0-609e-43bd-a076-253e3c725b17/Python/RL testing/3D_tic_tac_toe/save_models/TTT3D_actor_{IN_A_ROW}iar')
         self.do_not_init_a = True
+
+    def teach_on_pickle(self):
+        self.teaching_with_pickle = True
+        with open('3d_ttt_learning_states.pickle', 'rb') as re:
+            pickle_states = pickle.load(re)
+        with open('3d_ttt_learning_moves.pickle', 'rb') as re:
+            pickle_moves = pickle.load(re)
+        self.teach_actor(pickle_states, pickle_moves)
+        self.teaching_with_pickle = False
+
+    def write_pickles(self, pickle_states, pickle_moves):
+        if not self.teaching_with_pickle:
+            with open('3d_ttt_learning_states.pickle', 'wb') as wr:
+                pickle.dump(pickle_states, wr)
+            with open('3d_ttt_learning_moves.pickle', 'wb') as wr:
+                pickle.dump(pickle_moves, wr)
 
     def vis_training(self):
         plt.plot(self.loss_history, label='loss_history')
@@ -497,6 +524,10 @@ def reward_previous_moves(moves, multiplier):
 
 list_of_games = deque(maxlen=MAX_LEN)
 list_of_moves = deque(maxlen=MAX_LEN)
+list_of_master_moves = deque(maxlen=50000)
+list_of_master_games = deque(maxlen=50000)
+list_of_failed_moves = deque(maxlen=50000)
+list_of_failed_games = deque(maxlen=50000)
 list_of_boards = []
 randomness = 100
 tempSeed = time.time_ns()
@@ -507,9 +538,9 @@ actor = Player(dont_init=True)
 
 actual_play = True
 first_run = True
-I_want_to_play = False
+I_want_to_play = True
 I_want_to_watch = False
-set_amount_of_games = 10000
+set_amount_of_games = 20000
 total = time.perf_counter()
 for gen in range(20):
     games_played = 0
@@ -518,34 +549,29 @@ for gen in range(20):
     if not I_want_to_play:
         while games_played < set_amount_of_games:
             for board in list_of_boards:
-                if not board.game_over:
-                    chance_of_random = random.randint(0, int(randomness * 100))
-                    if chance_of_random != 0 or first_run:
-                        board.get_state(False, True)
-                    else:
-                        if board.whose_turn:
-                            move = actor.Actor_model(np.array([np.copy(board.board)], dtype='float32'))[0].numpy()
-                        else:
-                            move = actor.Actor_model((np.array([np.copy(board.board)], dtype='float32')) * -1)[0].numpy()
-                        board.get_state(False, False, actor_answer=move)
-                        # If I want to watch and its board 0 of the 500
-                        if I_want_to_watch and board.random_ == list_of_boards[0].random_ and board.game_over:
-                            print(move)
-                            board.vis()
+                chance_of_random = random.randint(0, int(randomness * 100))
+                if chance_of_random != 0 or first_run:
+                    # any bad moves go to list_of_failed_moves
+                    temp_list_of_failed_moves = board.get_state(False, True)
                 else:
-                    temp_moves_X = []
-                    temp_moves_O = []
-                    if I_want_to_watch and board.how_many_times_won > 2:
-                        if board.winner == 1:
-                            print("RED")
-                        elif board.winner == -1:
-                            print("BLUE")
-                        print(board.how_many_times_won)
+                    if board.whose_turn:
+                        move = actor.Actor_model(np.array([np.copy(board.board)], dtype='float32'))[0].numpy()
+                    else:
+                        move = actor.Actor_model((np.array([np.copy(board.board)], dtype='float32')) * -1)[0].numpy()
+                    temp_list_of_failed_moves = board.get_state(False, False, actor_answer=move)
+                    # If I want to watch and its board 0 of the 500
+                    if I_want_to_watch and board.random_ == list_of_boards[0].random_ and board.game_over:
+                        print(move)
                         board.vis()
 
-                        '''for i in (board.board_history_O, board.board_history_X):
-                            for ii in i:
-                                visualize3d(ii)'''
+                if len(temp_list_of_failed_moves) > 0:
+                    for fail in temp_list_of_failed_moves:
+                        list_of_failed_games.append(np.copy(board.previous_board))
+                        list_of_failed_moves.append(np.copy(fail))
+
+                if board.game_over:
+                    temp_moves_X = []
+                    temp_moves_O = []
 
                     if board.winner == -1:
                         temp_moves_O = reward_previous_moves(board.move_history_O, board.how_many_times_won)
@@ -563,7 +589,7 @@ for gen in range(20):
                     tempBoard_hist_O = []
                     for i in board.board_history_O.copy():
                         tempBoard_hist_O.append(i * -1)
-                    if random.randint(0, 500) != 0:
+                    if random.randint(0, 50) != 0:
                         if not board.board_history_X[0][0].any():
                             temp_moves_X.pop(0)
                             board.board_history_X.pop(0)
@@ -586,16 +612,49 @@ for gen in range(20):
                     list_of_moves.extend(temp_moves_O.copy())
                     list_of_games.extend(board.board_history_X.copy())
                     list_of_games.extend(tempBoard_hist_O.copy())'''
+
+                    if False and board.how_many_times_won > 1:
+                        # used for troubleshooting
+                        print(board.board_history_X)
+                        print(temp_moves_X)
+                        print(tempBoard_hist_O)
+                        print(temp_moves_O)
+                        if board.winner == 1:
+                            print("RED")
+                        elif board.winner == -1:
+                            print("BLUE")
+                        print(board.how_many_times_won)
+                        board.vis()
+                        '''for i in (board.board_history_O, board.board_history_X):
+                            for ii in i:
+                                visualize3d(ii)'''
+
+                    if (((len(board.board_history_X) - len(temp_moves_X)) != 0) or
+                            ((len(tempBoard_hist_O) - len(temp_moves_O)) != 0)):
+                        print("board and move data not the same length!")
                     for moves in (temp_moves_X, temp_moves_O):
                         for single_move in moves:
                             list_of_moves.append(np.copy(single_move))
 
                     for games in (board.board_history_X, tempBoard_hist_O):
-                        for single_game in games:
-                            list_of_games.append(np.copy(single_game))
+                        for single_round in games:
+                            list_of_games.append(np.copy(single_round))
 
                     if (len(list_of_games) - len(list_of_moves)) != 0:
                         print("Training data not the same length!")
+
+                    if board.how_many_times_won > 1:
+                        if board.winner == 1:
+                            for move in temp_moves_X:
+                                list_of_master_moves.append(np.copy(move))
+                            for round_ in board.board_history_X:
+                                list_of_master_games.append(np.copy(round_))
+
+                        elif board.winner == -1:
+                            for move in temp_moves_O:
+                                list_of_master_moves.append(np.copy(move))
+                            for round_ in tempBoard_hist_O:
+                                list_of_master_games.append(np.copy(round_))
 
                     board.reset()
                     prog_bar.update(1)
@@ -605,13 +664,20 @@ for gen in range(20):
         if first_run:
             first_run = False
         print("difference in total length:" + str(len(list_of_games) - len(list_of_moves)))
-        actor.teach_actor(np.array(list_of_games), np.array(list_of_moves))
+
+        actor.teach_actor(np.concatenate((np.array(list_of_failed_games),
+                                          np.array(list_of_master_games),
+                                          np.array(list_of_games))),
+                          np.concatenate((np.array(list_of_failed_moves),
+                                          np.array(list_of_master_moves),
+                                          np.array(list_of_moves))))
     else:
         against_me = list_of_boards[0]
         against_me.reset()
         while not against_me.game_over:
             if against_me.whose_turn:
                 move = actor.Actor_model(np.array([np.copy(against_me.board)], dtype='float32'))[0].numpy()
+                print(move)
                 against_me.get_state(False, False, actor_answer=move, verbose=True)
             else:
                 if I_want_to_watch:
